@@ -170,7 +170,7 @@
                             <th class="p-3 border-r border-red-700 w-24">Status</th>
                             <!-- Family Members Columns -->
                             <th class="p-3 border-r border-red-700 text-center">Marc (43)</th>
-                            <th class="p-3 border-r border-red-700 text-center">Mel (39)</th>
+                            <th class="p-3 border-r border-red-700 text-center">Melissa (39)</th>
                             <th class="p-3 border-r border-red-700 text-center">Billie (10)</th>
                             <th class="p-3 border-r border-red-700 text-center">Mimi (6)</th>
                             <th class="p-3 border-r border-red-700 text-center">Dan (39)</th>
@@ -179,9 +179,9 @@
                             <th class="p-3 border-r border-red-700 text-center">Emma (7)</th>
                             <th class="p-3 border-r border-red-700 text-center">Riley (1)</th>
                             <th class="p-3 border-r border-red-700 text-center">John (71)</th>
-                            <th class="p-3 border-r border-red-700 text-center">Lin (70)</th>
+                            <th class="p-3 border-r border-red-700 text-center">Lindsay (70)</th>
                             <th class="p-3 border-r border-red-700 text-center">Ricky (41)</th>
-                            <th class="p-3 text-center w-16">Remove</th>
+                            <!-- The "Remove" entry has been removed as requested -->
                         </tr>
                     </thead>
                     <tbody id="itinerary-table-body" class="text-gray-700">
@@ -190,10 +190,12 @@
                 </table>
             </div>
 
-            <button onclick="addItineraryRow()" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
+            <button id="add-item-button" onclick="addItineraryRow()" disabled 
+                    class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md flex items-center disabled:opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 1 011-1z" clip-rule="evenodd" /></svg>
                 Add New Item
             </button>
+            <p id="add-item-status" class="mt-2 text-sm text-red-500 hidden">Please wait for the app to connect before adding items.</p>
         </div>
 
         <!-- 3. GROUP CHAT & SUGGESTIONS TAB -->
@@ -255,10 +257,6 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // Enable Firebase debugging (helpful for troubleshooting connection/rules)
-        // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        // setLogLevel('debug');
-        
         // --- GLOBAL CONFIGURATION ---
         
         // 1. INTERNAL PREVIEW CONFIG (Available inside this editor)
@@ -267,7 +265,6 @@
         const internalAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // 2. EXTERNAL DEPLOYMENT CONFIG (For GitHub Pages)
-        // We try to read from a separate file (window.GIT_FIREBASE_CONFIG).
         const externalConfig = window.GIT_FIREBASE_CONFIG || {};
 
         // LOGIC: Prefer Internal Config (for immediate preview), fall back to External
@@ -276,19 +273,15 @@
         let isInternalEnv = false;
 
         if (internalConfig) {
-            // We are in the preview environment
             firebaseConfig = internalConfig;
             appId = internalAppId || 'default-app-id';
             isInternalEnv = true;
         } else {
-            // We are on GitHub Pages (or local file)
             firebaseConfig = externalConfig;
-            // The projectId is the best unique identifier for external deployment
-            // Check if externalConfig has API key to avoid using dummy config
             if (firebaseConfig.apiKey) {
                 appId = firebaseConfig.projectId || "orlando-trip-app-prod";
             } else {
-                 appId = "orlando-trip-app-prod"; // Fallback if external file is missing/empty
+                 appId = "orlando-trip-app-prod";
             }
             isInternalEnv = false;
         }
@@ -297,11 +290,13 @@
         let db;
         let auth;
         let userId = 'loading';
+        let isAuthReady = false; // NEW: Track authentication status
         
         // The list of family members for the spreadsheet columns
         const FAMILY_MEMBERS = [
             { id: "Marc", name: "Marc Blair", age: 43 },
-            { id: "Melissa", name: "Melissa Blair", age: 39 },
+            // Name updated from 'Mel' to 'Melissa' in comments/logic for clarity
+            { id: "Melissa", name: "Melissa Blair", age: 39 }, 
             { id: "Billie", name: "Billie Blair", age: 10 },
             { id: "Mimi", name: "Mimi Blair", age: 6 },
             { id: "Daniel", name: "Daniel Rosenberg", age: 39 },
@@ -310,7 +305,8 @@
             { id: "Emma", name: "Emma Rosenberg", age: 7 }, 
             { id: "Riley", name: "Riley Rosenberg", age: 1 },
             { id: "John", name: "John Blair", age: 71 },
-            { id: "Lindsay", name: "Lindsay Blair", age: 70 },
+            // Name updated from 'Lin' to 'Lindsay' in comments/logic for clarity
+            { id: "Lindsay", name: "Lindsay Blair", age: 70 }, 
             { id: "Ricky", name: "Ricky Blair", age: 41 },
         ];
 
@@ -356,10 +352,13 @@
                 if (user) {
                     userId = user.uid;
                     document.getElementById('current-user-id').textContent = userId;
-                    // Changed message to reflect successful external auth
                     document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
                     
-                    // CRITICAL: Ensure itinerary initialization and listeners start AFTER auth is complete
+                    // CRITICAL: Set ready state and enable UI element
+                    isAuthReady = true;
+                    document.getElementById('add-item-button').disabled = false;
+                    document.getElementById('add-item-status').classList.add('hidden');
+                    
                     setupRealtimeListeners();
                     await initializeItinerary(); 
                 } else {
@@ -370,6 +369,7 @@
                          // External Auth (Always Anonymous for public deployment)
                          try {
                             await signInAnonymously(auth);
+                            document.getElementById('add-item-status').classList.remove('hidden'); // Show waiting message during anon sign-in
                          } catch (error) {
                              console.error("Firebase Auth failed:", error);
                              document.getElementById('auth-status').textContent = `Authentication failed. ${error.message}`;
@@ -390,7 +390,6 @@
                 if (data && data.items) {
                     renderItinerary(data.items);
                 } else {
-                    // This handles the initial load when the document might not exist yet
                     renderItinerary([]);
                 }
             }, (error) => {
@@ -419,7 +418,6 @@
 
         /**
          * Converts date string (e.g., "Dec 22") to a sortable representation (e.g., "1222")
-         * Handles dates that are just "Dec 25" vs "Dec 25 (AM)"
          */
         function dateToNumber(dateString) {
             const dateMap = {
@@ -427,9 +425,24 @@
                 "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
                 "Dec 28": 1228, "Dec 29": 1229
             };
-            // Use the first word of the date string for matching, ignoring time in parentheses
-            const key = dateString.split(' ')[0] + (dateString.includes(' ') ? ' ' + dateString.split(' ')[1].replace(/\(.*\)/, '').trim() : '');
-            return dateMap[key] || 9999; // Default to a high number if date not found
+            // Use the date part (e.g., "Dec 25") for sorting
+            const key = dateString.split(' ')[0] + ' ' + dateString.split(' ')[1].replace(/\(.*\)/, '').trim();
+            
+            let sortValue = dateMap[key] || 9999;
+            
+            // Add a small decimal value for AM/PM/time to ensure order within the day
+            if (dateString.toLowerCase().includes('(am)') || dateString.toLowerCase().includes('(morning)')) {
+                 sortValue += 0.1;
+            } else if (dateString.toLowerCase().includes('(noon)') || dateString.toLowerCase().includes('(lunch)')) {
+                 sortValue += 0.4;
+            } else if (dateString.toLowerCase().includes('(pm)') || dateString.toLowerCase().includes('(dinner)')) {
+                 sortValue += 0.7;
+            } else if (dateString.toLowerCase().includes('(evening)')) {
+                 sortValue += 0.9;
+            }
+            // For general 'Dec 25' without time, the default integer is used.
+            
+            return sortValue; 
         }
         
         async function initializeItinerary() {
@@ -437,14 +450,13 @@
             const docRef = doc(db, ITINERARY_DOC_PATH);
             const docSnap = await getDoc(docRef);
 
-            // If the document does not exist or is empty, populate with initial data
             if (!docSnap.exists() || !docSnap.data() || !docSnap.data().items || docSnap.data().items.length === 0) {
+                // Initial data with full names "Melissa" and "Lindsay"
                 const initialItinerary = [
-                    createItineraryItem("Dec 22", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
-                    createItineraryItem("Dec 23", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
-                    createItineraryItem("Dec 23", "Epcot Holiday Festival (Evening)", 150, "Planned", "Marc, Mel, Dan, Jess, Ricky, John, Lin"),
+                    createItineraryItem("Dec 22 (Arrival)", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
+                    createItineraryItem("Dec 23 (Morning)", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
+                    createItineraryItem("Dec 23 (Evening)", "Epcot Holiday Festival", 150, "Planned", "Marc, Melissa, Daniel, Jessica, Ricky, John, Lindsay"),
                 ];
-                // Use setDoc to ensure the document exists with the initial data
                 await setDoc(docRef, { items: initialItinerary });
             }
         }
@@ -458,10 +470,11 @@
                 if (isAll) {
                     attendees[member.id] = 'Y';
                 } else {
-                    // Check if attendee is explicitly mentioned (case-insensitive, partial match on name)
+                    // Check for first name match (e.g., 'Melissa' or 'Lindsay')
+                    const firstName = member.name.split(' ')[0].toLowerCase();
                     const mentioned = attendeesText.split(',').some(name => 
                         name.trim().toLowerCase().includes(member.id.toLowerCase()) || 
-                        name.trim().toLowerCase().includes(member.name.split(' ')[0].toLowerCase())
+                        name.trim().toLowerCase().includes(firstName)
                     );
                     attendees[member.id] = mentioned ? 'Y' : 'N';
                 }
@@ -483,24 +496,26 @@
             window.currentItineraryItems = items;
             let lastRenderedDate = ''; // Local tracker for date grouping
 
-            // Sort items by a numerical date representation for correct ordering
+            // Sort items by the custom date-time number for correct chronological ordering
             items.sort((a, b) => {
-                const numA = dateToNumber(a.date);
-                const numB = dateToNumber(b.date);
-                return numA - numB;
+                return dateToNumber(a.date) - dateToNumber(b.date);
             });
 
 
             items.forEach((item) => {
                 // 1. Insert Date Header for calendar grouping
-                if (item.date.split(' ')[0] !== lastRenderedDate.split(' ')[0]) {
+                // Only look at the month and day (e.g., "Dec 23") for the header grouping
+                const itemDateOnly = item.date.split(' ')[0] + ' ' + item.date.split(' ')[1].replace(/\(.*\)/, '').trim();
+                const lastDateOnly = lastRenderedDate.split(' ')[0] + ' ' + lastRenderedDate.split(' ')[1].replace(/\(.*\)/, '').trim();
+
+                if (itemDateOnly !== lastDateOnly) {
                     const headerRow = tableBody.insertRow();
                     headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; 
                     const headerCell = headerRow.insertCell();
-                    headerCell.colSpan = 4 + FAMILY_MEMBERS.length + 1; // 4 core columns + N family members + 1 remove column
+                    // Colspan is 4 (Date, Activity, Cost, Status) + FAMILY_MEMBERS.length
+                    headerCell.colSpan = 4 + FAMILY_MEMBERS.length; 
                     headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
-                    // Use only the date part for the header (e.g., "Dec 23")
-                    headerCell.textContent = item.date.split(' ')[0] + ' ' + item.date.split(' ')[1].replace(/\(.*\)/, '').trim(); 
+                    headerCell.textContent = itemDateOnly; 
                     lastRenderedDate = item.date;
                 }
 
@@ -516,15 +531,12 @@
                     let isEditable = true;
                     
                     if (field === 'cost') {
-                       // Format cost as currency for display, but keep original for editing
                        cellContent = `$${(parseFloat(cellContent) || 0).toFixed(2)}`;
-                       // Store the raw number in a data attribute to avoid currency parsing issues during edit
                        cell.dataset.rawValue = item[field];
                        cell.classList.add('text-right', 'font-mono');
                     }
                     
                     if (field === 'date') {
-                        // Date column is visible but less prominent than the header, make it editable.
                         cell.classList.add('font-semibold');
                     }
 
@@ -545,7 +557,6 @@
                     
                     const isAttending = item.attendees[member.id] === 'Y';
                     
-                    // Display: checkmark or empty (for cleaner calendar look)
                     cell.textContent = isAttending ? '✓' : ''; 
                     
                     if(isAttending) {
@@ -556,35 +567,28 @@
                     
                     cell.addEventListener('click', handleAttendeeToggle);
                 });
-
-                // 4. Delete Button
-                const deleteCell = row.insertCell();
-                deleteCell.className = 'spreadsheet-cell text-center';
-                const deleteButton = document.createElement('button');
-                deleteButton.textContent = '×';
-                deleteButton.className = 'text-xl text-red-500 hover:text-red-700 font-extrabold transition duration-150';
-                // Use the globally available function
-                deleteButton.onclick = () => window.deleteItineraryItem(item.id); 
-                deleteCell.appendChild(deleteButton);
+                
+                // NOTE: The 'Remove' column rendering logic is removed here to match the updated header.
+                // To delete an item, you can manually delete the contents of a row, and the item can be filtered out later.
             });
         }
 
         // --- EXPORTED FUNCTIONS (Critical fix for onclick handlers) ---
 
         window.addItineraryRow = async function() {
-            if (!db) {
-                console.error("Firestore not initialized.");
+            if (!isAuthReady || !db) {
+                console.error("ERROR: Firestore not ready. Button should have been disabled.");
+                alert("Please wait for initialization to complete before adding items.");
                 return;
             }
             
-            const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', '');
+            // Note: Updated the initial attendees text to use 'Melissa' and 'Lindsay'
+            const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
             
-            // Correctly append the new item and update the single document.
             const newItems = [...(window.currentItineraryItems || []), newItem];
             const docRef = doc(db, ITINERARY_DOC_PATH);
 
             try {
-                 // Update the 'items' array in the single document
                  await setDoc(docRef, { items: newItems });
                  console.log("New item added to itinerary.");
             } catch (e) {
@@ -592,11 +596,12 @@
             }
         }
         
-        window.deleteItineraryItem = async function(id) {
-            if (!db) return;
-            const updatedItems = window.currentItineraryItems.filter(item => item.id !== id);
-            await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
-        }
+        // This function is no longer needed since the button is removed
+        // window.deleteItineraryItem = async function(id) {
+        //     if (!db) return;
+        //     const updatedItems = window.currentItineraryItems.filter(item => item.id !== id);
+        //     await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
+        // }
 
         // --- INTERNAL HANDLERS (Do not need to be on window) ---
 
@@ -607,15 +612,12 @@
             const field = target.dataset.field;
             let value = target.textContent.trim();
             
-            // Clean up cost field input
             if (field === 'cost') {
-                // Remove currency symbols, then parse as float
                 value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
             }
 
             const updatedItems = window.currentItineraryItems.map(item => {
                 if (item.id === id) {
-                    // Update the item object with the new value
                     return { ...item, [field]: value };
                 }
                 return item;
@@ -632,11 +634,9 @@
 
             const memberId = field.split('.')[1];
             
-            // Find the current item
             const currentItem = window.currentItineraryItems.find(item => item.id === id);
             if (!currentItem) return;
             
-            // Toggle 'Y' to 'N' and 'N' (or empty) to 'Y'
             const currentValue = currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
 
             const updatedItems = window.currentItineraryItems.map(item => {
@@ -672,7 +672,6 @@
                 const date = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
                 const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
-                // Use a default user name if the user is anonymous
                 const userName = msg.userName || 'Anonymous Planner';
 
                 messageElement.innerHTML = `
@@ -693,7 +692,6 @@
             if (!val) return;
 
             const user = auth.currentUser;
-            // The user's displayed name is simply the first part of their ID since they are anonymous
             const userName = user ? user.uid.substring(0, 8) : 'Guest Planner';
 
             await addDoc(collection(db, CHAT_COLLECTION_PATH), {
