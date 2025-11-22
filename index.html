@@ -1,92 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Orlando Family Trip Planner</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- IMPORTANT: Load external config for GitHub Pages deployment -->
     <script src="firebase-config.js"></script>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f7f3e8; /* Light Cream Background */
-        }
-        .tab-button {
-            transition: all 0.2s;
-        }
-        .tab-button.active {
-            box-shadow: 0 4px #c2410c; /* Amber line for active tab */
-            background-color: #fef3c7;
-            color: #b91c1c; /* Red text */
-            border-bottom: 2px solid #b91c1c;
-        }
-        .chat-container {
-            max-height: 400px;
-            overflow-y: auto;
-            scroll-behavior: smooth;
-        }
-        /* Styling for the spreadsheet cells to maintain the grid feel */
-        .spreadsheet-cell {
-            padding: 8px;
-            border: 1px solid #e5e7eb;
-            transition: background-color 0.1s;
-        }
-        .spreadsheet-cell[contenteditable="true"] {
-             cursor: text;
-        }
-        [contenteditable="true"]:focus {
-            outline: 2px solid #fb923c; /* Orange focus ring */
-            background-color: white;
-        }
-        
-        /* Column Resizing Styles */
-        .resizable-th {
-            position: relative;
-            user-select: none;
-        }
-        .resizer {
-            position: absolute;
-            top: 0;
-            right: 0;
-            bottom: 0;
-            width: 8px;
-            cursor: col-resize;
-            background-color: transparent; /* Invisible by default */
-            transition: background-color 0.1s;
-            z-index: 10;
-        }
-        .resizable-th:hover .resizer {
-            background-color: rgba(255, 255, 255, 0.2); /* Slight visual aid on hover */
-        }
-        .resizing {
-            background-color: #fb923c !important; /* Orange when actively dragging */
-        }
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="styles.css">
 
-        /* Drag and Drop Styles */
-        .draggable-row {
-            cursor: grab;
-        }
-        .draggable-row:active {
-            cursor: grabbing;
-        }
-        .dragging {
-            opacity: 0.7;
-            background-color: #fef3c7;
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-        }
-        .drag-over-top {
-            border-top: 3px solid #fb923c;
-        }
-        .drag-over-bottom {
-            border-bottom: 3px solid #fb923c;
-        }
-    </style>
+    <!-- Firebase Compat SDKs (Namespace) - Works with file:// protocol -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 </head>
+
 <body>
 
     <div class="max-w-7xl mx-auto p-4 md:p-8 bg-white shadow-xl rounded-xl mt-4 mb-8 border-t-8 border-red-700">
@@ -97,15 +30,12 @@
                 Blair/Rosenberg Christmas Orlando 2025 🏰
             </h1>
             <p class="text-xl text-gray-600">Real-time collaboration for the trip of a lifetime!</p>
-            
+
             <!-- FAMILY PHOTO SECTION -->
             <div class="mt-6 flex justify-center">
-                <img 
-                    src="family_photo.png" 
-                    alt="The Blair & Rosenberg Family" 
+                <img src="family_photo.png" alt="The Blair & Rosenberg Family"
                     class="rounded-xl shadow-2xl max-w-full h-auto md:max-w-2xl border-4 border-white bg-gray-200"
-                    onerror="this.style.display='none'"
-                >
+                    onerror="this.style.display='none'">
             </div>
 
             <div class="mt-4 p-2 bg-white inline-block rounded shadow-sm">
@@ -118,10 +48,18 @@
 
         <!-- NAVIGATION TABS -->
         <div class="flex flex-wrap justify-center border-b border-gray-200 mb-6">
-            <button onclick="showTab('dashboard')" class="tab-button active py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg" data-tab="dashboard">Dashboard</button>
-            <button onclick="showTab('itinerary')" class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg" data-tab="itinerary">Itinerary & Budget</button>
-            <button onclick="showTab('chat')" class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg" data-tab="chat">Group Chat & Ideas</button>
-            <button onclick="showTab('gpt')" class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg" data-tab="gpt">Mickey's Planning Pal GPT</button>
+            <button onclick="showTab('dashboard')"
+                class="tab-button active py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
+                data-tab="dashboard">Dashboard</button>
+            <button onclick="showTab('itinerary')"
+                class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
+                data-tab="itinerary">Itinerary Planner</button>
+            <button onclick="showTab('chat')"
+                class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
+                data-tab="chat">Group Chat & Ideas</button>
+            <button onclick="showTab('gpt')"
+                class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
+                data-tab="gpt">Mickey's Planning Pal GPT</button>
         </div>
 
         <!-- TAB CONTENT -->
@@ -129,7 +67,7 @@
         <!-- 1. DASHBOARD TAB -->
         <div id="tab-dashboard" class="tab-content">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
+
                 <!-- Family/Disney Visuals & Links -->
                 <div class="col-span-1 lg:col-span-2 space-y-6">
                     <div class="bg-yellow-50 p-6 rounded-xl shadow-md border-l-4 border-yellow-400">
@@ -141,7 +79,8 @@
                                 🐭 🏰 🌟 ✨ 🚀 👑
                             </div>
                             <p class="text-gray-700 mt-2 text-sm">
-                                This is our shared hub! We are 12 people (6 adults, 6 kids/young adults) traveling together. Let's make this the best Christmas ever!
+                                This is our shared hub! We are 12 people (6 adults, 6 kids/young adults) traveling
+                                together. Let's make this the best Christmas ever!
                             </p>
                         </div>
                     </div>
@@ -149,18 +88,27 @@
                     <!-- Hotel Info -->
                     <div class="bg-blue-50 p-6 rounded-xl shadow-md border-l-4 border-blue-400">
                         <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707l-.707-.707V8a6 6 0 00-6-6zm-6 8.28V8a6 6 0 1112 0v2.28a1 1 0 00.27.67l.73.73H3l.73-.73a1 1 0 00.27-.67zM10 18a3 3 0 100-6 3 3 0 000 6z"/></svg>
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-600"
+                                viewBox="0 0 20 20" fill="currentColor">
+                                <path
+                                    d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707l-.707-.707V8a6 6 0 00-6-6zm-6 8.28V8a6 6 0 1112 0v2.28a1 1 0 00.27.67l.73.73H3l.73-.73a1 1 0 00.27-.67zM10 18a3 3 0 100-6 3 3 0 000 6z" />
+                            </svg>
                             Our Home Base: Waldorf Astoria Orlando
                         </h3>
                         <ul class="text-sm space-y-2 text-gray-700 list-disc list-inside">
-                            <li>**Official Disney Hotel:** Offers complimentary luxury coach transportation to all Disney parks and Disney Springs.</li>
-                            <li>**Amenities:** Access to two pools, luxe private cabanas, a zero-entry pool (great for Riley, 1), and use of the lazy river/water slide at the adjacent Signia by Hilton Bonnet Creek.</li>
-                            <li>**Kids Club:** WA Kids Club (ages 5-12, perfect for Billie, 10, Mimi, 6, Joey, 5, and Emma, 7) offers supervised evening activities.</li>
-                            <li>**Dining:** Multiple options including Oscar's Brasserie (great breakfast buffet), Bull & Bear Steakhouse, and poolside Aquamarine.</li>
+                            <li>**Official Disney Hotel:** Offers complimentary luxury coach transportation to all
+                                Disney parks and Disney Springs.</li>
+                            <li>**Amenities:** Access to two pools, luxe private cabanas, a zero-entry pool (great for
+                                Riley, 1), and use of the lazy river/water slide at the adjacent Signia by Hilton Bonnet
+                                Creek.</li>
+                            <li>**Kids Club:** WA Kids Club (ages 5-12, perfect for Billie, 10, Mimi, 6, Joey, 5, and
+                                Emma, 7) offers supervised evening activities.</li>
+                            <li>**Dining:** Multiple options including Oscar's Brasserie (great breakfast buffet), Bull
+                                & Bear Steakhouse, and poolside Aquamarine.</li>
                         </ul>
                     </div>
                 </div>
-                
+
                 <!-- Flight Info & Links Column -->
                 <div class="col-span-1 space-y-6">
                     <div class="bg-green-50 p-6 rounded-xl shadow-md border-l-4 border-green-400">
@@ -189,9 +137,15 @@
                             🔗 Key Links
                         </h3>
                         <ul class="space-y-2 text-sm">
-                            <li><a href="https://disneyworld.disney.go.com/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Official Walt Disney World Site</a></li>
-                            <li><a href="https://waldorfastoriaorlando.com/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Waldorf Astoria Orlando</a></li>
-                            <li><a href="https://disneyworld.disney.go.com/events-tours/holidays/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Disney Christmas Events Info</a></li>
+                            <li><a href="https://disneyworld.disney.go.com/" target="_blank"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">Official Walt Disney World
+                                    Site</a></li>
+                            <li><a href="https://waldorfastoriaorlando.com/" target="_blank"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">Waldorf Astoria Orlando</a>
+                            </li>
+                            <li><a href="https://disneyworld.disney.go.com/events-tours/holidays/" target="_blank"
+                                    class="text-blue-600 hover:text-blue-800 font-medium">Disney Christmas Events
+                                    Info</a></li>
                         </ul>
                     </div>
                 </div>
@@ -200,14 +154,19 @@
 
         <!-- 2. ITINERARY & SPREADSHEET TAB -->
         <div id="tab-itinerary" class="tab-content hidden">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Collaborative Trip Itinerary & Commitment Tracker</h2>
-            <p class="text-sm text-gray-600 mb-4">Click to edit Activity or Status. Click a checkmark column to commit to an activity. Drag the rows within a group to reorder them.</p>
-            
-            <div class="overflow-x-auto rounded-lg shadow-lg">
+            <h2 class="text-2xl font-bold text-red-700 mb-4">Trip Itinerary</h2>
+            <p class="text-sm text-gray-600 mb-4">Click to edit Activity or Status. Click a checkmark column to commit
+                to an activity. Drag rows to reorder or move between days!</p>
+
+            <!-- Top Scrollbar Container -->
+            <div id="top-scroll-container" class="overflow-x-auto mb-1">
+                <div id="top-scroll-content" class="h-1"></div>
+            </div>
+
+            <div id="itinerary-table-container" class="overflow-x-auto rounded-lg shadow-lg">
                 <table id="itinerary-table" class="min-w-full bg-white border-collapse">
                     <thead>
                         <tr class="bg-red-600 text-white text-sm uppercase tracking-wider sticky top-0 z-10">
-                            <!-- NOTE: Added resizer class to headers we want to be resizable -->
                             <th id="th-date" class="p-3 border-r border-red-700 w-32 resizable-th">
                                 Date
                                 <div class="resizer" data-column="date"></div>
@@ -241,26 +200,34 @@
                 </table>
             </div>
 
-            <button id="add-item-button" onclick="addItineraryRow()" disabled 
-                    class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md flex items-center disabled:opacity-50">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 1 011-1z" clip-rule="evenodd" /></svg>
+            <button id="add-item-button" onclick="addItineraryRow()" disabled
+                class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md flex items-center disabled:opacity-50">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 1 011-1z"
+                        clip-rule="evenodd" />
+                </svg>
                 Add New Idea (TBC)
             </button>
-            <p id="add-item-status" class="mt-2 text-sm text-red-500 hidden">Please wait for the app to connect before adding items.</p>
+            <p id="add-item-status" class="mt-2 text-sm text-red-500 hidden">Please wait for the app to connect before
+                adding items.</p>
         </div>
 
         <!-- 3. GROUP CHAT & SUGGESTIONS TAB -->
         <div id="tab-chat" class="tab-content hidden">
             <h2 class="text-2xl font-bold text-red-700 mb-4">Group Suggestion Box & Chat</h2>
-            
+
             <div class="bg-gray-100 p-4 rounded-xl shadow-inner mb-4 chat-container" id="chat-messages">
                 <p class="text-center text-gray-500">Loading real-time suggestions...</p>
             </div>
 
             <div class="bg-white p-4 rounded-xl shadow-lg border">
                 <h3 class="text-lg font-semibold text-gray-800 mb-2">Send a Message or Suggestion</h3>
-                <textarea id="chat-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" rows="3" placeholder="Type your idea or question here..."></textarea>
-                <button onclick="sendMessage()" class="mt-3 w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition duration-150 shadow-md">
+                <textarea id="chat-input"
+                    class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500"
+                    rows="3" placeholder="Type your idea or question here..."></textarea>
+                <button onclick="sendMessage()"
+                    class="mt-3 w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition duration-150 shadow-md">
                     Submit Suggestion
                 </button>
             </div>
@@ -269,22 +236,27 @@
         <!-- 4. CUSTOM GPT PLANNER TAB -->
         <div id="tab-gpt" class="tab-content hidden">
             <h2 class="text-2xl font-bold text-red-700 mb-4">Mickey's Planning Pal 🧠</h2>
-            <p class="text-base text-gray-600 mb-4">Ask our custom AI planner for ideas, tips, or facts about our Orlando Christmas trip. The Pal is a Disney expert!</p>
-            
+            <p class="text-base text-gray-600 mb-4">Ask our custom AI planner for ideas, tips, or facts about our
+                Orlando Christmas trip. The Pal is a Disney expert!</p>
+
             <div class="flex flex-col lg:flex-row gap-6">
                 <!-- Chat Window -->
                 <div class="lg:w-2/3 bg-white p-5 rounded-xl shadow-lg border">
                     <div id="gpt-chat-log" class="chat-container bg-gray-50 p-4 rounded-lg mb-4 h-96">
                         <div class="text-center text-gray-500 py-4">
                             <p class="font-bold text-red-600">Mickey's Planning Pal</p>
-                            <p>Hello! I'm here to help you plan the most magical family Christmas in Orlando. Ask me anything!</p>
+                            <p>Hello! I'm here to help you plan the most magical family Christmas in Orlando. Ask me
+                                anything!</p>
                         </div>
                     </div>
-                    
+
                     <!-- Input -->
                     <div class="flex space-x-3">
-                        <input type="text" id="gpt-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Ask a question about the trip...">
-                        <button id="gpt-send-button" onclick="sendGptQuery()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 disabled:opacity-50">
+                        <input type="text" id="gpt-input"
+                            class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500"
+                            placeholder="Ask a question about the trip...">
+                        <button id="gpt-send-button" onclick="sendGptQuery()"
+                            class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 disabled:opacity-50">
                             Ask Pal
                         </button>
                     </div>
@@ -302,823 +274,8 @@
 
     </div>
 
-    <!-- Firebase SDKs -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        // --- GLOBAL CONFIGURATION ---
-        
-        // 1. INTERNAL PREVIEW CONFIG (Available inside this editor)
-        const internalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const internalAppId = typeof __app_id !== 'undefined' ? __app_id : null;
-        const internalAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
-        // 2. EXTERNAL DEPLOYMENT CONFIG (For GitHub Pages)
-        // This relies on firebase-config.js defining a global variable window.GIT_FIREBASE_CONFIG
-        const externalConfig = window.GIT_FIREBASE_CONFIG || {};
-
-        // LOGIC: Prefer Internal Config (for immediate preview), fall back to External
-        let firebaseConfig;
-        let appId;
-        let isInternalEnv = false;
-
-        if (internalConfig) {
-            firebaseConfig = internalConfig;
-            appId = internalAppId || 'default-app-id';
-            isInternalEnv = true;
-        } else {
-            firebaseConfig = externalConfig;
-            if (firebaseConfig.apiKey) {
-                appId = firebaseConfig.projectId || "orlando-trip-app-prod";
-            } else {
-                 // Fallback if no config is found, though initializeFirebase will fail without the apiKey
-                 appId = "orlando-trip-app-prod";
-            }
-            isInternalEnv = false;
-        }
-
-        let app;
-        let db;
-        let auth;
-        let userId = 'loading';
-        let isAuthReady = false; // NEW: Track authentication status
-        
-        // The list of family members for the spreadsheet columns
-        const FAMILY_MEMBERS = [
-            { id: "Marc", name: "Marc Blair", age: 43 },
-            { id: "Melissa", name: "Melissa Blair", age: 39 }, 
-            { id: "Billie", name: "Billie Blair", age: 10 },
-            { id: "Mimi", name: "Mimi Blair", age: 6 },
-            { id: "Daniel", name: "Daniel Rosenberg", age: 39 },
-            { id: "Jessica", name: "Jessica Blair", age: 37 },
-            { id: "Joey", name: "Joey Rosenberg", age: 5 }, 
-            { id: "Emma", name: "Emma Rosenberg", age: 7 }, 
-            { id: "Riley", name: "Riley Rosenberg", age: 1 },
-            { id: "John", name: "John Blair", age: 71 },
-            { id: "Lindsay", name: "Lindsay Blair", age: 70 }, 
-            { id: "Ricky", name: "Ricky Blair", age: 41 },
-        ];
-
-        // CRITICAL FIX: Changed from a single document path to a collection path for individual items
-        const ITINERARY_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_itinerary_items`;
-        const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
-
-        // --- UI UTILITIES (Attach to window for global access) ---
-        window.showTab = function(tabId) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
-
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-            document.querySelector(`.tab-button[data-tab="${tabId}"]`).classList.add('active');
-        }
-
-        // --- AUTHENTICATION & INITIALIZATION ---
-
-        function initializeFirebase() {
-            // DEBUG: Update status right away
-            document.getElementById('app-load-status').textContent = "Firebase initialization starting...";
-
-            // 1. Check if we have a valid configuration (checking API key is sufficient)
-            if (!firebaseConfig || !firebaseConfig.apiKey) {
-                console.error("Firebase config is missing or incomplete. Using fallback.");
-                document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Firebase keys missing or incomplete!";
-                document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
-                document.getElementById('app-load-status').textContent = "Firebase initialization failed: No API Key.";
-                return;
-            }
-
-            // 2. Initialize App
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                document.getElementById('app-load-status').textContent = "Firebase services initialized. Waiting for Auth...";
-            } catch (error) {
-                console.error("Firebase initialization failed:", error);
-                document.getElementById('auth-status').textContent = `⚠️ OFFLINE: Initialization failed. ${error.message}`;
-                document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
-                document.getElementById('app-load-status').textContent = `Firebase initialization failed: ${error.message}`;
-                return;
-            }
-
-
-            // 3. Set up Auth Listener
-            onAuthStateChanged(auth, async (user) => {
-                if (user) {
-                    userId = user.uid;
-                    document.getElementById('current-user-id').textContent = userId;
-                    document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
-                    document.getElementById('app-load-status').textContent = "Authentication successful. User ID confirmed.";
-                    
-                    // CRITICAL: Set ready state and enable UI element
-                    isAuthReady = true;
-                    document.getElementById('add-item-button').disabled = false;
-                    document.getElementById('add-item-status').classList.add('hidden');
-                    
-                    setupRealtimeListeners();
-                    await initializeItinerary();
-                    setupResizableColumns(); // Initialize column resizing after DOM is ready
-                    setupDragAndDrop(); // Initialize drag and drop
-                } else {
-                     if (isInternalEnv && internalAuthToken) {
-                         // Internal Preview Auth
-                         document.getElementById('app-load-status').textContent = "Signing in with Custom Token...";
-                         signInWithCustomToken(auth, internalAuthToken).catch(err => console.error("Token Auth Fail", err));
-                     } else {
-                         // External Auth (Always Anonymous for public deployment)
-                         document.getElementById('app-load-status').textContent = "Signing in Anonymously...";
-                         try {
-                            await signInAnonymously(auth);
-                            document.getElementById('add-item-status').classList.remove('hidden'); // Show waiting message during anon sign-in
-                         } catch (error) {
-                             console.error("Firebase Auth failed:", error);
-                             document.getElementById('auth-status').textContent = `Authentication failed. ${error.message}`;
-                         }
-                     }
-                }
-            });
-        }
-
-        // --- FIRESTORE LISTENERS & LOGIC ---
-
-        function setupRealtimeListeners() {
-            if (!db) return;
-            document.getElementById('app-load-status').textContent = "Setting up real-time Firestore listeners...";
-
-            // 1. Itinerary Listener: Listens for changes to the single document
-            const itineraryCollection = collection(db, ITINERARY_COLLECTION_PATH);
-            // CRITICAL FIX: Listen to the collection instead of a single document
-            onSnapshot(itineraryCollection, (snapshot) => {
-                const items = snapshot.docs.map(d => ({ 
-                    ...d.data(), 
-                    id: d.id // Use Firestore doc ID as the item ID
-                })); 
-                renderItinerary(items);
-                document.getElementById('app-load-status').textContent = "Itinerary loaded and updated from collection.";
-            }, (error) => {
-                 console.error("Itinerary snapshot error:", error);
-                 document.getElementById('app-load-status').textContent = `Itinerary error: ${error.message}`;
-            });
-
-            // 2. Chat Listener
-            const q = collection(db, CHAT_COLLECTION_PATH); 
-            onSnapshot(q, (snapshot) => {
-                const messages = snapshot.docs.map(d => d.data());
-                // Sort locally by timestamp (if available) before rendering
-                messages.sort((a, b) => {
-                    const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
-                    const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
-                    return timeA - timeB;
-                });
-                renderChat(messages);
-                document.getElementById('app-load-status').textContent = "Chat log updated.";
-            }, (error) => {
-                 console.error("Chat snapshot error:", error);
-                 document.getElementById('app-load-status').textContent = `Chat error: ${error.message}`;
-            });
-        }
-        
-        // --- ITINERARY RENDER & MUTATION LOGIC ---
-        
-        window.currentItineraryItems = [];
-        
-        // Helper to convert date string (e.g., "Dec 25") to a number for primary sorting.
-        // TBC items are placed at the end (9999.0).
-        function getPrimarySortValue(dateString) {
-            if (!dateString || typeof dateString !== 'string' || dateString.toUpperCase() === 'TBC') {
-                return 9999.0; // Place TBC items at the very end
-            }
-            
-            const dateMap = {
-                "Dec 20": 1220, "Dec 21": 1221, "Dec 22": 1222, "Dec 23": 1223, 
-                "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
-                "Dec 28": 1228, "Dec 29": 1229, "Jan 1": 101, "Jan 2": 102 // Simple Jan mapping
-            };
-            
-            const datePartMatch = dateString.match(/^(Dec \d{1,2}|Jan \d{1,2})/); 
-            const key = datePartMatch ? datePartMatch[1].trim() : '';
-            
-            return dateMap[key] || 9999.0; 
-        }
-
-        /**
-         * Checks if the itinerary collection is empty and populates it if necessary.
-         */
-        async function initializeItinerary() {
-            if (!db) return;
-            const collectionRef = collection(db, ITINERARY_COLLECTION_PATH);
-            const snapshot = await getDocs(collectionRef);
-            
-            // Check if any items exist that are NOT the TBC items we might insert
-            if (snapshot.docs.filter(d => d.data().date !== 'TBC').length === 0) {
-                // Initial data
-                const initialItinerary = [
-                    // Ensure new items have the timeOrder field
-                    createItineraryItem("Dec 22 (Arrival)", "Arrivals / Check-in (after 3PM)", "Booked", "Marc, Melissa, John, Lindsay, Ricky", 1),
-                    createItineraryItem("Dec 23", "Magic Kingdom Day (Lunch at Be Our Guest)", "Planned", "All", 1),
-                    createItineraryItem("Dec 23", "Epcot Holiday Festival", "Planned", "Marc, Melissa, Daniel, Jessica, Ricky, John, Lindsay", 2),
-                    createItineraryItem("TBC", "Try the new Star Wars ride at Hollywood Studios", "Idea", "Daniel, Ricky", 1),
-                    createItineraryItem("TBC", "Golf Day for the adults", "Idea", "Marc, Daniel, John, Ricky", 2),
-                ];
-                // Add each item as a separate document in the collection
-                for (const item of initialItinerary) {
-                    await addDoc(collectionRef, item);
-                }
-                document.getElementById('app-load-status').textContent = "Initial itinerary populated.";
-            } else {
-                 document.getElementById('app-load-status').textContent = "Itinerary collection already exists.";
-            }
-        }
-
-        /**
-         * Creates a base itinerary item object.
-         * Added timeOrder field.
-         */
-        function createItineraryItem(date, activity, status, attendeesText, timeOrder = 0) {
-            const attendees = {};
-            // Default everyone to N unless specified 'All'
-            const isAll = attendeesText.toLowerCase().includes('all') || attendeesText.toLowerCase().includes('everyone');
-            
-            FAMILY_MEMBERS.forEach(member => {
-                if (isAll) {
-                    attendees[member.id] = 'Y';
-                } else {
-                    // Check for first name match 
-                    const firstName = member.name.split(' ')[0].toLowerCase();
-                    const mentioned = attendeesText.split(',').some(name => 
-                        name.trim().toLowerCase().includes(member.id.toLowerCase()) || 
-                        name.trim().toLowerCase().includes(firstName)
-                    );
-                    attendees[member.id] = mentioned ? 'Y' : 'N';
-                }
-            });
-
-            return {
-                date: date, // Can now be "TBC"
-                activity: activity,
-                status: status,
-                attendees: attendees,
-                cost: 0, 
-                timeOrder: timeOrder, // New field for drag-and-drop ordering within a day/group
-            };
-        }
-
-        function renderItinerary(items) {
-            const tableBody = document.getElementById('itinerary-table-body');
-            tableBody.innerHTML = '';
-            window.currentItineraryItems = items;
-            
-            // 1. Group items by their primary sort value (date/TBC)
-            const groupedItems = {};
-            items.forEach(item => {
-                const primarySortValue = getPrimarySortValue(item.date);
-                if (!groupedItems[primarySortValue]) {
-                    groupedItems[primarySortValue] = { 
-                        name: item.date === 'TBC' ? 'TBC / Future Ideas' : item.date.match(/^(Dec \d{1,2}|Jan \d{1,2})/)?.[0] || 'Unknown Date',
-                        items: [] 
-                    };
-                }
-                groupedItems[primarySortValue].items.push(item);
-            });
-
-            // 2. Sort the groups chronologically (9999.0 is last)
-            const sortedGroupKeys = Object.keys(groupedItems).sort((a, b) => parseFloat(a) - parseFloat(b));
-
-            // Define which fields are editable
-            const editableFields = ['date', 'activity', 'status'];
-            const colspan = editableFields.length + FAMILY_MEMBERS.length; 
-
-            // 3. Render each group
-            sortedGroupKeys.forEach(groupKey => {
-                const group = groupedItems[groupKey];
-                
-                // Sort items within the group by the new timeOrder field
-                group.items.sort((a, b) => (a.timeOrder || 0) - (b.timeOrder || 0));
-
-                // Date Header Row
-                const headerRow = tableBody.insertRow();
-                headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; 
-                const headerCell = headerRow.insertCell();
-                headerCell.colSpan = colspan; 
-                headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
-                // If it's TBC group, use the descriptive name. Otherwise, use the clean date.
-                headerCell.textContent = group.name; 
-                headerCell.dataset.groupKey = groupKey; // For drag and drop logic
-
-                // Activity Rows
-                group.items.forEach((item) => {
-                    if (!item || !item.id) {
-                         console.warn("Skipping malformed itinerary item:", item);
-                         return; 
-                    }
-
-                    const row = tableBody.insertRow();
-                    row.className = 'border-t hover:bg-red-50 transition duration-100 draggable-row';
-                    row.setAttribute('draggable', 'true');
-                    row.dataset.id = item.id;
-                    row.dataset.order = item.timeOrder || 0;
-                    row.dataset.groupKey = groupKey; // For drag and drop
-
-                    // Core fields
-                    editableFields.forEach((field) => {
-                        const cell = row.insertCell();
-                        
-                        let cellContent = item[field] || ''; 
-                        
-                        if (field === 'date') {
-                            cell.classList.add('font-semibold', 'relative', 'whitespace-nowrap');
-                            cell.dataset.groupKey = groupKey;
-                            
-                            // Only allow the calendar picker for NON-TBC dates
-                            if (group.name !== 'TBC / Future Ideas') {
-                                cell.addEventListener('click', (e) => handleDateCellClick(e, item.id));
-                                cell.setAttribute('contenteditable', 'false'); 
-                                cell.textContent = cellContent;
-                            } else {
-                                // TBC cells are fixed
-                                cell.setAttribute('contenteditable', 'false');
-                                cell.textContent = 'TBC';
-                                cell.classList.remove('cursor-pointer');
-                                cell.classList.add('bg-gray-100');
-                            }
-                        } else {
-                            cell.className += ' spreadsheet-cell text-sm whitespace-nowrap';
-                            cell.setAttribute('contenteditable', 'true');
-                            cell.dataset.id = item.id;
-                            cell.dataset.field = field;
-                            cell.textContent = cellContent;
-                            cell.addEventListener('blur', handleCellEdit);
-                        }
-                    });
-
-                    // Attendee commitment fields
-                    FAMILY_MEMBERS.forEach(member => {
-                        const cell = row.insertCell();
-                        cell.className = 'spreadsheet-cell text-center text-xl font-bold cursor-pointer transition duration-100';
-                        cell.dataset.id = item.id;
-                        cell.dataset.field = `attendees.${member.id}`;
-                        
-                        const isAttending = item.attendees && item.attendees[member.id] === 'Y';
-                        
-                        cell.textContent = isAttending ? '✓' : ''; 
-                        
-                        if(isAttending) {
-                            cell.classList.add('bg-green-100', 'text-green-700', 'hover:bg-green-200');
-                        } else {
-                            cell.classList.add('bg-white', 'text-gray-300', 'hover:bg-red-50');
-                        }
-                        
-                        cell.addEventListener('click', handleAttendeeToggle);
-                    });
-                });
-            });
-        }
-        
-        // --- DRAG AND DROP REORDERING LOGIC ---
-        
-        let dragSrcEl = null;
-
-        function setupDragAndDrop() {
-            // Attach drag listeners to the table body (delegation)
-            const tableBody = document.getElementById('itinerary-table-body');
-            tableBody.addEventListener('dragstart', handleDragStart);
-            tableBody.addEventListener('dragover', handleDragOver);
-            tableBody.addEventListener('dragleave', handleDragLeave);
-            tableBody.addEventListener('drop', handleDrop);
-            tableBody.addEventListener('dragend', handleDragEnd);
-        }
-
-        function handleDragStart(e) {
-            const targetRow = e.target.closest('.draggable-row');
-            if (!targetRow) return;
-
-            dragSrcEl = targetRow;
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', dragSrcEl.dataset.id);
-            
-            // Add slight delay to avoid initial flicker
-            setTimeout(() => {
-                dragSrcEl.classList.add('dragging');
-            }, 0);
-        }
-
-        function handleDragOver(e) {
-            if (e.preventDefault) {
-                e.preventDefault(); // Allows us to drop
-            }
-            e.dataTransfer.dropEffect = 'move';
-
-            const targetRow = e.target.closest('.draggable-row');
-            if (!targetRow || targetRow === dragSrcEl) return;
-
-            // Only allow dragging within the same group (same date/TBC status)
-            if (targetRow.dataset.groupKey !== dragSrcEl.dataset.groupKey) {
-                 e.dataTransfer.dropEffect = 'none';
-                 return;
-            }
-
-            // Remove existing indicators
-            document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over-top', 'drag-over-bottom');
-            });
-            
-            // Determine if dragging over top half or bottom half
-            const rect = targetRow.getBoundingClientRect();
-            const y = e.clientY - rect.top; // Mouse position relative to the row
-            const height = rect.height;
-
-            if (y < height / 2) {
-                targetRow.classList.add('drag-over-top');
-            } else {
-                targetRow.classList.add('drag-over-bottom');
-            }
-            return false;
-        }
-
-        function handleDragLeave(e) {
-            // Clean up the indicator when dragging leaves a row
-            e.target.closest('.draggable-row')?.classList.remove('drag-over-top', 'drag-over-bottom');
-        }
-
-        async function handleDrop(e) {
-            e.stopPropagation(); // Stops some browsers from redirecting.
-            const dropTargetRow = e.target.closest('.draggable-row');
-            
-            // Clean up visual indicators immediately
-            document.querySelectorAll('.drag-over-top, .drag-over-bottom').forEach(el => {
-                el.classList.remove('drag-over-top', 'drag-over-bottom');
-            });
-
-            if (dragSrcEl === dropTargetRow || !dropTargetRow || dragSrcEl.dataset.groupKey !== dropTargetRow.dataset.groupKey) {
-                return false;
-            }
-
-            const isDroppingBefore = dropTargetRow.classList.contains('drag-over-top');
-            const targetId = dropTargetRow.dataset.id;
-            const draggedId = dragSrcEl.dataset.id;
-            const groupKey = dragSrcEl.dataset.groupKey;
-            
-            // Get all items in the current group
-            const groupItems = window.currentItineraryItems.filter(item => {
-                const itemGroupKey = getPrimarySortValue(item.date).toString();
-                return itemGroupKey === groupKey;
-            });
-            
-            // Re-sort the local array based on the drag-drop action
-            const draggedItem = groupItems.find(item => item.id === draggedId);
-            const targetItem = groupItems.find(item => item.id === targetId);
-            
-            if (!draggedItem || !targetItem) return false;
-
-            // Remove dragged item from its current position
-            const tempArray = groupItems.filter(item => item.id !== draggedId);
-
-            // Find the index to insert the dragged item
-            let insertIndex = tempArray.findIndex(item => item.id === targetId);
-            if (!isDroppingBefore) {
-                insertIndex++; // Insert after the target row
-            }
-            
-            // Insert the dragged item at the new position
-            tempArray.splice(insertIndex, 0, draggedItem);
-            
-            // 4. Update the timeOrder property for all items in the affected group
-            const batchUpdates = tempArray.map((item, index) => {
-                // Time order starts at 1
-                const newTimeOrder = index + 1; 
-                
-                // Only update if the order has actually changed
-                if ((item.timeOrder || 0) !== newTimeOrder) {
-                    const docRef = doc(db, ITINERARY_COLLECTION_PATH, item.id);
-                    return updateDoc(docRef, { timeOrder: newTimeOrder });
-                }
-                return null;
-            }).filter(u => u !== null); // Filter out items that didn't change
-
-            if (batchUpdates.length > 0) {
-                // Await all updates (not a true batch write, but ensures updates start)
-                await Promise.all(batchUpdates);
-                console.log(`Reordered ${batchUpdates.length} items in group ${groupKey}.`);
-            }
-            
-            return true;
-        }
-
-        function handleDragEnd(e) {
-            dragSrcEl.classList.remove('dragging');
-            dragSrcEl = null;
-        }
-
-        // --- DATE PICKER LOGIC ---
-
-        // Simple helper to convert date string (e.g., "Dec 25 (Xmas)") to YYYY-MM-DD
-        function descriptiveDateToISO(dateString) {
-            if (!dateString) return '';
-            // Basic approximation, assumes year 2025 based on the app title
-            const year = 2025;
-            const monthDayMatch = dateString.match(/Dec (\d{1,2})|Jan (\d{1,2})/);
-            
-            if (monthDayMatch) {
-                let month = '12'; // Default to Dec
-                let day = monthDayMatch[1] || monthDayMatch[2];
-                
-                if (dateString.includes('Jan')) month = '01';
-
-                day = day.padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            }
-            return '';
-        }
-
-        // Simple helper to convert YYYY-MM-DD to descriptive date (e.g., "Dec 25")
-        function ISOToDescriptiveDate(isoDate) {
-            if (!isoDate) return '';
-            try {
-                const date = new Date(isoDate + 'T00:00:00'); // Use T00:00:00 to prevent timezone shift issues
-                const month = date.toLocaleString('default', { month: 'short' }); // Dec
-                const day = date.getDate(); // 25
-                return `${month} ${day}`; // Dec 25
-            } catch (e) {
-                return isoDate;
-            }
-        }
-        
-        async function handleDateCellClick(event, id) {
-            const cell = event.currentTarget;
-            if (cell.querySelector('input[type="date"]')) return; // Already editing
-            
-            // Prevent editing if the cell belongs to the TBC group
-            if (cell.dataset.groupKey === getPrimarySortValue('TBC').toString()) return;
-
-
-            const currentText = cell.textContent.trim();
-            const currentISO = descriptiveDateToISO(currentText);
-
-            // 1. Create and inject the date input
-            const dateInput = document.createElement('input');
-            dateInput.type = 'date';
-            dateInput.className = 'w-full h-full p-0 m-0 border-none bg-transparent focus:ring-0 text-sm font-semibold';
-            dateInput.value = currentISO;
-            
-            // Clear cell and add input
-            cell.textContent = '';
-            cell.appendChild(dateInput);
-            dateInput.focus();
-
-            // 2. Set up event listener for blur (to save)
-            dateInput.addEventListener('blur', async () => {
-                const newISO = dateInput.value;
-                
-                // Restore original text initially (listener will update later)
-                dateInput.remove(); 
-                cell.textContent = currentText;
-                
-                if (newISO && newISO !== currentISO) {
-                    const newDescriptiveDate = ISOToDescriptiveDate(newISO);
-                    
-                    // Add back common activity descriptor if it exists, but do NOT include morning/evening suffixes in the base date
-                    let finalDateValue = newDescriptiveDate;
-
-                    try {
-                        const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
-                        await updateDoc(docRef, { 
-                            date: finalDateValue,
-                            timeOrder: 0 // Reset timeOrder when date changes to push it to the end of the new day
-                        });
-                    } catch (e) {
-                        console.error("Error updating date:", e);
-                    }
-                }
-            });
-        }
-        
-        // --- COLUMN RESIZING LOGIC ---
-        let currentResizer = null;
-        let startX = 0;
-        let startWidth = 0;
-        let headerElement = null;
-
-        function setupResizableColumns() {
-            const resizers = document.querySelectorAll('.resizer');
-            resizers.forEach(resizer => {
-                resizer.addEventListener('mousedown', handleMouseDown);
-            });
-        }
-
-        function handleMouseDown(e) {
-            currentResizer = e.target;
-            currentResizer.classList.add('resizing');
-            
-            headerElement = currentResizer.parentElement;
-            startX = e.clientX;
-            // Get the current computed width of the header
-            startWidth = headerElement.offsetWidth;
-            
-            // Attach global listeners for mouse move and up
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-            
-            e.preventDefault(); // Prevent text selection during drag
-        }
-
-        function handleMouseMove(e) {
-            if (!currentResizer) return;
-            const newWidth = startWidth + (e.clientX - startX);
-            
-            // Ensure a minimum width (e.g., 60px)
-            if (newWidth > 60) {
-                headerElement.style.width = `${newWidth}px`;
-            }
-        }
-
-        function handleMouseUp() {
-            if (currentResizer) {
-                currentResizer.classList.remove('resizing');
-                currentResizer = null;
-                headerElement = null;
-            }
-            // Remove global listeners
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        }
-
-        // --- EXPORTED FUNCTIONS (Now uses TBC as default date) ---
-
-        /**
-         * New item defaults to "TBC" and gets the next available timeOrder for the TBC group.
-         */
-        window.addItineraryRow = async function() {
-            if (!isAuthReady || !db) {
-                console.error("ERROR: Firestore not ready.");
-                return;
-            }
-            
-            const collectionRef = collection(db, ITINERARY_COLLECTION_PATH);
-            
-            // Find the current max timeOrder for TBC items
-            const tbcGroupKey = getPrimarySortValue('TBC').toString();
-            const tbcItems = window.currentItineraryItems.filter(item => getPrimarySortValue(item.date).toString() === tbcGroupKey);
-            const maxOrder = tbcItems.reduce((max, item) => Math.max(max, item.timeOrder || 0), 0);
-            const newOrder = maxOrder + 1;
-
-            try {
-                // New item defaults to 'TBC' date and the next order in that group
-                const newItem = createItineraryItem('TBC', 'New Idea / Reservation', 'Idea', 'Marc, Melissa', newOrder); 
-                await addDoc(collectionRef, newItem);
-                console.log("New TBC item added to itinerary collection successfully.");
-
-            } catch (e) {
-                console.error("Error adding document to collection: ", e);
-            }
-        }
-        
-        // --- INTERNAL HANDLERS ---
-
-        /**
-         * Uses updateDoc directly on the specific item document.
-         */
-        async function handleCellEdit(event) {
-            if (!db) return;
-            const target = event.target;
-            const id = target.dataset.id; // This is the Firestore Document ID
-            const field = target.dataset.field;
-            let value = target.textContent.trim();
-            
-            // Do not run for date cell, as it uses a separate handler
-            if (field === 'date') return;
-
-            try {
-                const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
-                // Update only the specific field of the specific document
-                await updateDoc(docRef, { [field]: value });
-            } catch (e) {
-                console.error("Error updating document field:", e);
-                // Rely on the onSnapshot listener to revert the cell if the update fails
-            }
-        }
-
-        /**
-         * Uses updateDoc directly on the specific item document.
-         */
-        async function handleAttendeeToggle(event) {
-            if (!db) return;
-            const target = event.target;
-            const id = target.dataset.id;
-            const field = target.dataset.field; // attendees.MemberId
-            if (!id || !field) return;
-
-            const memberId = field.split('.')[1];
-            
-            // Find the current value locally from window.currentItineraryItems
-            const currentItem = window.currentItineraryItems.find(item => item.id === id);
-            if (!currentItem) return;
-
-            // Determine the next state (Y/N)
-            const isAttending = currentItem.attendees && currentItem.attendees[memberId] === 'Y';
-            const nextValue = isAttending ? 'N' : 'Y';
-
-            try {
-                const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
-                // Use dot notation to update a nested field directly
-                await updateDoc(docRef, { [`attendees.${memberId}`]: nextValue });
-            } catch (e) {
-                 console.error("Error updating attendee status:", e);
-            }
-        }
-
-        // --- CHAT RENDER LOGIC (Unchanged) ---
-
-        function renderChat(messages) {
-            const chatLog = document.getElementById('chat-messages');
-            chatLog.innerHTML = '';
-            if (messages.length === 0) chatLog.innerHTML = '<p class="text-center text-gray-500 py-4">No suggestions yet!</p>';
-
-            messages.forEach(msg => {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'mb-3 p-3 rounded-lg shadow-sm';
-                const isMine = msg.userId === userId;
-
-                if (isMine) {
-                    messageElement.classList.add('bg-red-100', 'ml-auto', 'max-w-[90%]');
-                } else {
-                    messageElement.classList.add('bg-white', 'mr-auto', 'max-w-[90%]');
-                }
-
-                const date = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
-                const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                const userName = msg.userName || 'Anonymous Planner';
-
-                messageElement.innerHTML = `
-                    <p class="text-xs ${isMine ? 'text-red-700' : 'text-gray-500'} font-semibold mb-1">
-                        ${userName} <span class="float-right font-normal text-gray-400">${timeString}</span>
-                    </p>
-                    <p class="text-gray-800 whitespace-pre-wrap">${msg.text}</p>
-                `;
-                chatLog.appendChild(messageElement);
-            });
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        window.sendMessage = async function() {
-            if (!db) return;
-            const chatInput = document.getElementById('chat-input');
-            const val = chatInput.value.trim();
-            if (!val) return;
-
-            const user = auth.currentUser;
-            const userName = user ? user.uid.substring(0, 8) : 'Guest Planner';
-
-            await addDoc(collection(db, CHAT_COLLECTION_PATH), {
-                userId: userId,
-                userName: userName,
-                text: val,
-                timestamp: serverTimestamp(),
-            });
-            chatInput.value = '';
-        }
-
-        // --- GPT LOGIC (Unchanged) ---
-        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key="; 
-        
-        window.sendGptQuery = async function() {
-            const inputElement = document.getElementById('gpt-input');
-            const chatLog = document.getElementById('gpt-chat-log');
-            const userQuery = inputElement.value.trim();
-            if (!userQuery) return;
-
-            // User Msg
-            const msgDiv = document.createElement('div');
-            msgDiv.className = "p-3 rounded-lg shadow-sm mb-3 bg-red-100 ml-auto max-w-[90%]";
-            msgDiv.innerHTML = `<p class="text-xs text-red-700 font-semibold">You</p><p>${userQuery}</p>`;
-            chatLog.appendChild(msgDiv);
-            inputElement.value = '';
-
-            // Fake "Thinking"
-            const loadingDiv = document.createElement('div');
-            loadingDiv.innerHTML = "Thinking... 🧠";
-            loadingDiv.className = "text-sm text-gray-500 p-2";
-            chatLog.appendChild(loadingDiv);
-            chatLog.scrollTop = chatLog.scrollHeight;
-            
-            setTimeout(() => {
-                loadingDiv.remove();
-                const responseDiv = document.createElement('div');
-                responseDiv.className = "p-3 rounded-lg shadow-sm mb-3 bg-white mr-auto max-w-[90%] border border-gray-200";
-                responseDiv.innerHTML = `<p class="text-xs text-blue-600 font-semibold">Mickey's Pal</p><p>That's a great question about "${userQuery}"! Since I am a static demo, I can't browse the live web right now, but remember to check the My Disney Experience app for the latest wait times!</p>`;
-                chatLog.appendChild(responseDiv);
-                chatLog.scrollTop = chatLog.scrollHeight;
-            }, 1500);
-        }
-
-        // --- BOOTSTRAP ---
-        window.onload = function() {
-            document.getElementById('app-load-status').textContent = "Window loaded. Initializing Firebase...";
-            initializeFirebase();
-        }
-
-    </script>
+    <!-- App Logic (Standard Script, No Module) -->
+    <script src="app.js"></script>
 </body>
+
 </html>
