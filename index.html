@@ -318,8 +318,7 @@
         const ITINERARY_DOC_PATH = `artifacts/${appId}/public/data/orlando_planning/itinerary`;
         const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
 
-        // --- UI UTILITIES ---
-
+        // --- UI UTILITIES (Attach to window for global access) ---
         window.showTab = function(tabId) {
             document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
             document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
@@ -357,8 +356,10 @@
                 if (user) {
                     userId = user.uid;
                     document.getElementById('current-user-id').textContent = userId;
+                    // Changed message to reflect successful external auth
                     document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
-                    // *** CRITICAL FIX: Ensure itinerary initialization and listeners start AFTER auth is complete
+                    
+                    // CRITICAL: Ensure itinerary initialization and listeners start AFTER auth is complete
                     setupRealtimeListeners();
                     await initializeItinerary(); 
                 } else {
@@ -412,11 +413,25 @@
             });
         }
         
-        // --- ITINERARY RENDER LOGIC ---
+        // --- ITINERARY RENDER & MUTATION LOGIC ---
         
         window.currentItineraryItems = [];
-        let lastRenderedDate = ''; // Global to track the date for calendar grouping
 
+        /**
+         * Converts date string (e.g., "Dec 22") to a sortable representation (e.g., "1222")
+         * Handles dates that are just "Dec 25" vs "Dec 25 (AM)"
+         */
+        function dateToNumber(dateString) {
+            const dateMap = {
+                "Dec 20": 1220, "Dec 21": 1221, "Dec 22": 1222, "Dec 23": 1223, 
+                "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
+                "Dec 28": 1228, "Dec 29": 1229
+            };
+            // Use the first word of the date string for matching, ignoring time in parentheses
+            const key = dateString.split(' ')[0] + (dateString.includes(' ') ? ' ' + dateString.split(' ')[1].replace(/\(.*\)/, '').trim() : '');
+            return dateMap[key] || 9999; // Default to a high number if date not found
+        }
+        
         async function initializeItinerary() {
             if (!db) return;
             const docRef = doc(db, ITINERARY_DOC_PATH);
@@ -466,21 +481,26 @@
             const tableBody = document.getElementById('itinerary-table-body');
             tableBody.innerHTML = '';
             window.currentItineraryItems = items;
-            lastRenderedDate = ''; // Reset date tracker
+            let lastRenderedDate = ''; // Local tracker for date grouping
 
-            // Sort items by date string
-            items.sort((a, b) => a.date.localeCompare(b.date));
+            // Sort items by a numerical date representation for correct ordering
+            items.sort((a, b) => {
+                const numA = dateToNumber(a.date);
+                const numB = dateToNumber(b.date);
+                return numA - numB;
+            });
 
 
             items.forEach((item) => {
                 // 1. Insert Date Header for calendar grouping
-                if (item.date !== lastRenderedDate) {
+                if (item.date.split(' ')[0] !== lastRenderedDate.split(' ')[0]) {
                     const headerRow = tableBody.insertRow();
-                    headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; // Z-5 to keep it above regular rows
+                    headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; 
                     const headerCell = headerRow.insertCell();
                     headerCell.colSpan = 4 + FAMILY_MEMBERS.length + 1; // 4 core columns + N family members + 1 remove column
                     headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
-                    headerCell.textContent = item.date;
+                    // Use only the date part for the header (e.g., "Dec 23")
+                    headerCell.textContent = item.date.split(' ')[0] + ' ' + item.date.split(' ')[1].replace(/\(.*\)/, '').trim(); 
                     lastRenderedDate = item.date;
                 }
 
@@ -543,10 +563,13 @@
                 const deleteButton = document.createElement('button');
                 deleteButton.textContent = '×';
                 deleteButton.className = 'text-xl text-red-500 hover:text-red-700 font-extrabold transition duration-150';
-                deleteButton.onclick = () => deleteItineraryItem(item.id);
+                // Use the globally available function
+                deleteButton.onclick = () => window.deleteItineraryItem(item.id); 
                 deleteCell.appendChild(deleteButton);
             });
         }
+
+        // --- EXPORTED FUNCTIONS (Critical fix for onclick handlers) ---
 
         window.addItineraryRow = async function() {
             if (!db) {
@@ -554,9 +577,9 @@
                 return;
             }
             
-            const newItem = createItineraryItem('Dec 24', 'Christmas Eve Dinner Idea', 100, 'Idea', '');
+            const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', '');
             
-            // *** FIX: Correctly append the new item and update the single document.
+            // Correctly append the new item and update the single document.
             const newItems = [...(window.currentItineraryItems || []), newItem];
             const docRef = doc(db, ITINERARY_DOC_PATH);
 
@@ -571,11 +594,11 @@
         
         window.deleteItineraryItem = async function(id) {
             if (!db) return;
-            // Removed window.confirm as per constraints. 
-            // In a real application, a custom UI modal would replace this.
             const updatedItems = window.currentItineraryItems.filter(item => item.id !== id);
             await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
         }
+
+        // --- INTERNAL HANDLERS (Do not need to be on window) ---
 
         async function handleCellEdit(event) {
             if (!db) return;
@@ -649,9 +672,12 @@
                 const date = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
                 const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 
+                // Use a default user name if the user is anonymous
+                const userName = msg.userName || 'Anonymous Planner';
+
                 messageElement.innerHTML = `
                     <p class="text-xs ${isMine ? 'text-red-700' : 'text-gray-500'} font-semibold mb-1">
-                        ${msg.userName} <span class="float-right font-normal text-gray-400">${timeString}</span>
+                        ${userName} <span class="float-right font-normal text-gray-400">${timeString}</span>
                     </p>
                     <p class="text-gray-800 whitespace-pre-wrap">${msg.text}</p>
                 `;
@@ -667,7 +693,8 @@
             if (!val) return;
 
             const user = auth.currentUser;
-            const userName = user && user.isAnonymous ? 'Guest Planner' : 'Family Member';
+            // The user's displayed name is simply the first part of their ID since they are anonymous
+            const userName = user ? user.uid.substring(0, 8) : 'Guest Planner';
 
             await addDoc(collection(db, CHAT_COLLECTION_PATH), {
                 userId: userId,
