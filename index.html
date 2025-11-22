@@ -3,260 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🎄 Orlando Family Christmas Planner</title>
-    <!-- Load Tailwind CSS -->
+    <title>Orlando Family Trip Planner</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        /* Custom styles for aesthetic */
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f3e8; /* Light Cream Background */
+            background-color: #f7fafc; /* Light gray background */
         }
-        .tab-button {
-            transition: all 0.2s;
+        .container-main {
+            min-height: 100vh;
+        }
+        .itinerary-grid {
+            display: grid;
+            grid-template-columns: 200px repeat(12, minmax(100px, 1fr)); /* Fixed Day column + 12 family members */
+            overflow-x: auto;
+            border-radius: 0.5rem;
+        }
+        .grid-header, .grid-cell {
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .grid-header {
+            background-color: #1e3a8a; /* Dark blue header */
+            color: white;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .grid-header-day {
+            position: sticky;
+            left: 0;
+            z-index: 20;
+            background-color: #1e3a8a; 
+        }
+        .grid-cell-day {
+            position: sticky;
+            left: 0;
+            z-index: 5;
+            background-color: #dbeafe; /* Light blue for day column */
+            font-weight: 600;
+        }
+        .grid-input {
+            width: 100%;
+            border: none;
+            background: transparent;
+            min-height: 3rem;
+            resize: none;
+            padding: 0.25rem;
+            box-sizing: border-box;
+            outline: none;
         }
         .tab-button.active {
-            box-shadow: 0 4px #c2410c; /* Amber line for active tab */
-            background-color: #fef3c7;
+            border-color: #1e3a8a;
+            color: #1e3a8a;
+            background-color: #eff6ff;
         }
-        .chat-container {
-            max-height: 400px;
-            overflow-y: auto;
-            scroll-behavior: smooth;
+        .chat-message {
+            border-radius: 0.75rem;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.5rem;
+            max-width: 80%;
+            word-wrap: break-word;
         }
-        .spreadsheet-cell {
-            padding: 8px;
-            border: 1px solid #e5e7eb;
-            cursor: pointer;
-            transition: background-color 0.1s;
+        .chat-sender {
+            font-weight: 600;
+            font-size: 0.75rem;
+            opacity: 0.8;
+            margin-bottom: 0.125rem;
         }
-        .spreadsheet-cell:hover {
-            background-color: #fef9e8;
+        .message-mine {
+            background-color: #bfdbfe; /* Light blue */
+            margin-left: auto;
         }
-        [contenteditable="true"]:focus {
-            outline: 2px solid #fb923c; /* Orange focus ring */
+        .message-other {
+            background-color: #e5e7eb; /* Light gray */
+            margin-right: auto;
+        }
+        /* Style for mobile view of the grid */
+        @media (max-width: 768px) {
+            .itinerary-grid {
+                grid-template-columns: 100px repeat(12, minmax(150px, 1fr)); /* Wider columns for mobile content */
+            }
+            .chat-container {
+                max-height: 60vh;
+            }
         }
     </style>
 </head>
-<body>
+<body class="bg-gray-50">
 
-    <div class="max-w-7xl mx-auto p-4 md:p-8 bg-white shadow-xl rounded-xl mt-4 mb-8 border-t-8 border-red-700">
-
-        <!-- HEADER & FAMILY INFO -->
+    <div class="container-main mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-extrabold text-red-700 mb-2 tracking-tight">
-                Blair/Rosenberg Christmas Orlando 2025 🏰
+            <h1 class="text-4xl font-extrabold text-indigo-800 tracking-tight">
+                🌴 Orlando 2025: Family Trip Planner
             </h1>
-            <p class="text-xl text-gray-600">Real-time collaboration for the trip of a lifetime!</p>
-            <div id="auth-status" class="text-sm mt-2 text-green-600 font-semibold"></div>
+            <p class="mt-2 text-xl text-gray-600">
+                The ultimate collaborative itinerary & chat for the Blair & Rosenberg families.
+            </p>
         </header>
 
-        <!-- NAVIGATION TABS -->
-        <div class="flex flex-wrap justify-center border-b border-gray-200 mb-6">
-            <button onclick="showTab('dashboard')" class="tab-button active py-2 px-4 md:px-6 text-lg font-medium text-gray-700 hover:text-red-600 rounded-t-lg" data-tab="dashboard">Dashboard</button>
-            <button onclick="showTab('itinerary')" class="tab-button py-2 px-4 md:px-6 text-lg font-medium text-gray-700 hover:text-red-600 rounded-t-lg" data-tab="itinerary">Itinerary & Budget</button>
-            <button onclick="showTab('chat')" class="tab-button py-2 px-4 md:px-6 text-lg font-medium text-gray-700 hover:text-red-600 rounded-t-lg" data-tab="chat">Group Chat & Ideas</button>
-            <button onclick="showTab('gpt')" class="tab-button py-2 px-4 md:px-6 text-lg font-medium text-gray-700 hover:text-red-600 rounded-t-lg" data-tab="gpt">Mickey's Planning Pal GPT</button>
+        <!-- Authentication and Status Indicator -->
+        <div class="mb-6 p-3 bg-white shadow-lg rounded-lg text-sm">
+            <p id="auth-status" class="text-gray-700 font-medium">Initializing Firebase...</p>
+            <p class="text-xs text-gray-500 mt-1">
+                Your ID for collaboration: <span id="current-user-id" class="font-mono text-xs text-indigo-500 bg-indigo-50 p-1 rounded">loading</span>
+            </p>
         </div>
 
-        <!-- TAB CONTENT -->
-
-        <!-- 1. DASHBOARD TAB -->
-        <div id="tab-dashboard" class="tab-content">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                <!-- Family/Disney Visuals & Links -->
-                <div class="col-span-1 lg:col-span-2 space-y-6">
-                    <div class="bg-yellow-50 p-6 rounded-xl shadow-md border-l-4 border-yellow-400">
-                        <h2 class="text-2xl font-bold text-gray-800 mb-3 flex items-center">
-                            Welcome Family! 👨‍👩‍👧‍👦
-                        </h2>
-                        <div class="flex flex-wrap gap-4 items-start">
-                            <!-- Family Placeholder -->
-                            <div class="w-24 h-24 bg-red-200 rounded-full flex items-center justify-center text-4xl text-red-700 font-bold shadow-inner">
-                                B&R
-                            </div>
-                            <!-- Disney Character Emojis -->
-                            <div class="text-4xl space-x-2 pt-2">
-                                🐭 🏰 🌟 ✨ 🚀 👑
-                            </div>
-                            <p class="text-gray-700 mt-2 text-sm max-w-sm">
-                                This is our shared hub! We are 12 people (6 adults, 6 kids/young adults) traveling together. Let's make this the best Christmas ever!
-                                <span class="block mt-1 font-semibold text-xs text-red-600">User ID: <span id="current-user-id">Loading...</span></span>
-                            </p>
-                        </div>
-                    </div>
-
-                    <!-- Hotel Info -->
-                    <div class="bg-blue-50 p-6 rounded-xl shadow-md border-l-4 border-blue-400">
-                        <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707l-.707-.707V8a6 6 0 00-6-6zm-6 8.28V8a6 6 0 1112 0v2.28a1 1 0 00.27.67l.73.73H3l.73-.73a1 1 0 00.27-.67zM10 18a3 3 0 100-6 3 3 0 000 6z"/></svg>
-                            Our Home Base: Waldorf Astoria Orlando
-                        </h3>
-                        <ul class="text-sm space-y-2 text-gray-700 list-disc list-inside">
-                            <li>**Official Disney Hotel:** Offers complimentary luxury coach transportation to all Disney parks and Disney Springs.</li>
-                            <li>**Amenities:** Access to two pools, luxe private cabanas, a zero-entry pool (great for Riley, 1), and use of the lazy river/water slide at the adjacent Signia by Hilton Bonnet Creek.</li>
-                            <li>**Kids Club:** WA Kids Club (ages 5-12, perfect for Billie, 10, Mimi, 6, Joey, 5, and Emma, 7) offers supervised evening activities (Astoria After Dark - Date Night Approved!).</li>
-                            <li>**Dining:** Multiple options including Oscar's Brasserie (great breakfast buffet), Bull & Bear Steakhouse, and poolside Aquamarine.</li>
-                            <li>**Christmas Magic:** Expect festive decorations, gingerbread displays, and holiday programming throughout the resort!</li>
-                        </ul>
-                    </div>
-                </div>
-                
-                <!-- Flight Info & Links Column -->
-                <div class="col-span-1 space-y-6">
-                    <div class="bg-green-50 p-6 rounded-xl shadow-md border-l-4 border-green-400">
-                        <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center">
-                            ✈️ Flights Status (Blair/Rosenberg)
-                        </h3>
-                        <div id="flights-info" class="space-y-3 text-sm">
-                            <div class="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm">
-                                <span class="font-semibold text-gray-700">Marc & Melissa's Crew:</span>
-                                <span class="text-green-600 font-bold">Confirmed - Dec 21st</span>
-                            </div>
-                            <div class="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm">
-                                <span class="font-semibold text-gray-700">Daniel & Jessica's Crew:</span>
-                                <span class="text-red-600 font-bold">TBD - Need to Book!</span>
-                            </div>
-                            <div class="flex justify-between items-center p-2 bg-white rounded-lg shadow-sm">
-                                <span class="font-semibold text-gray-700">John, Lindsay & Ricky:</span>
-                                <span class="text-green-600 font-bold">Confirmed - Dec 20th</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- External Links -->
-                    <div class="bg-gray-50 p-6 rounded-xl shadow-md">
-                        <h3 class="text-xl font-bold text-gray-800 mb-3 flex items-center">
-                            🔗 Key Links
-                        </h3>
-                        <ul class="space-y-2 text-sm">
-                            <li><a href="https://disneyworld.disney.go.com/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Official Walt Disney World Site</a></li>
-                            <li><a href="https://waldorfastoriaorlando.com/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Waldorf Astoria Orlando</a></li>
-                            <li><a href="https://disneyworld.disney.go.com/events-tours/holidays/" target="_blank" class="text-blue-600 hover:text-blue-800 font-medium">Disney Christmas Events Info</a></li>
-                            <li><a href="#" class="text-blue-600 hover:text-blue-800 font-medium">Our Shared Photo Album (TBD)</a></li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 2. ITINERARY & SPREADSHEET TAB -->
-        <div id="tab-itinerary" class="tab-content hidden">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Collaborative Trip Itinerary & Budget</h2>
-            <p class="text-sm text-gray-600 mb-4">Edit any cell directly! All changes are saved instantly and shared with the group.</p>
-            
-            <div class="overflow-x-auto rounded-lg shadow-lg">
-                <table class="min-w-full bg-white border-collapse">
-                    <thead>
-                        <tr class="bg-red-600 text-white text-sm uppercase tracking-wider">
-                            <th class="p-3 border-r border-red-700 sticky left-0 bg-red-600 w-32">Date / Time</th>
-                            <th class="p-3 border-r border-red-700 w-48">Activity</th>
-                            <th class="p-3 border-r border-red-700 w-24">Cost (Total)</th>
-                            <th class="p-3 border-r border-red-700 w-24">Status</th>
-                            <!-- Family Members Columns (Ages Updated) -->
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Marc">Marc (43)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Melissa">Melissa (39)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Billie">Billie (10)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Mimi">Mimi (6)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Daniel">Daniel (39)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Jessica">Jessica (37)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Joey">Joey (5)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Emma">Emma (7)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Riley">Riley (1)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="John">John (71)</th>
-                            <th class="p-3 border-r border-red-700 text-center" data-member="Lindsay">Lindsay (70)</th>
-                            <th class="p-3 text-center" data-member="Ricky">Ricky (41)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="itinerary-table-body" class="text-gray-700">
-                        <!-- Itinerary Rows will be dynamically added here by JavaScript -->
-                    </tbody>
-                </table>
-            </div>
-
-            <button onclick="addItineraryRow()" class="mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md flex items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clip-rule="evenodd" /></svg>
-                Add New Item
+        <!-- Tab Navigation -->
+        <div class="flex border-b border-gray-200 mb-6">
+            <button id="tab-itinerary" class="tab-button active py-2 px-4 text-gray-600 border-b-2 border-transparent transition duration-150 ease-in-out font-medium hover:border-blue-500" onclick="showTab('itinerary')">
+                Itinerary Spreadsheet
+            </button>
+            <button id="tab-chat" class="tab-button py-2 px-4 text-gray-600 border-b-2 border-transparent transition duration-150 ease-in-out font-medium hover:border-blue-500" onclick="showTab('chat')">
+                Family Chat Room
             </button>
         </div>
 
-        <!-- 3. GROUP CHAT & SUGGESTIONS TAB -->
-        <div id="tab-chat" class="tab-content hidden">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Group Suggestion Box & Chat</h2>
+        <!-- ITINERARY TAB CONTENT -->
+        <div id="itinerary-content" class="tab-content">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Day-by-Day Itinerary</h2>
+            <div class="mb-4 text-sm text-gray-600">
+                <p>Click on any cell to edit the plan for that specific day and activity. Changes save instantly!</p>
+            </div>
             
-            <div class="bg-gray-100 p-4 rounded-xl shadow-inner mb-4 chat-container" id="chat-messages">
-                <p class="text-center text-gray-500">Loading real-time suggestions...</p>
+            <!-- Itinerary Grid Container -->
+            <div class="bg-white shadow-xl rounded-lg overflow-hidden">
+                <div class="itinerary-grid" id="itinerary-grid">
+                    <!-- Dynamic Grid Content will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- CHAT TAB CONTENT -->
+        <div id="chat-content" class="tab-content hidden">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Real-Time Chat</h2>
+            
+            <div id="chat-container" class="chat-container bg-white shadow-xl rounded-lg p-4 mb-4 h-96 overflow-y-auto flex flex-col-reverse">
+                <div id="chat-messages" class="flex flex-col">
+                    <!-- Dynamic Chat Messages will be inserted here -->
+                </div>
             </div>
 
-            <div class="bg-white p-4 rounded-xl shadow-lg border">
-                <h3 class="text-lg font-semibold text-gray-800 mb-2">Send a Message or Suggestion</h3>
-                <textarea id="chat-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" rows="3" placeholder="Type your idea or question here... (e.g., Should we book lunch at Be Our Guest?)"></textarea>
-                <button onclick="sendMessage()" class="mt-3 w-full md:w-auto bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-6 rounded-lg transition duration-150 shadow-md">
-                    Submit Suggestion
+            <!-- Chat Input Form -->
+            <form id="chat-form" class="flex gap-2">
+                <input type="text" id="chat-input" placeholder="Type your message..." required class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500 shadow-sm">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Send
                 </button>
-            </div>
+            </form>
         </div>
-
-        <!-- 4. CUSTOM GPT PLANNER TAB -->
-        <div id="tab-gpt" class="tab-content hidden">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Mickey's Planning Pal 🧠</h2>
-            <p class="text-base text-gray-600 mb-4">Ask our custom AI planner for ideas, tips, or facts about our Orlando Christmas trip. The Pal is a Disney expert!</p>
-            
-            <div class="flex flex-col lg:flex-row gap-6">
-                <!-- Chat Window -->
-                <div class="lg:w-2/3 bg-white p-5 rounded-xl shadow-lg border">
-                    <div id="gpt-chat-log" class="chat-container bg-gray-50 p-4 rounded-lg mb-4">
-                        <div class="text-center text-gray-500 py-4">
-                            <p class="font-bold text-red-600">Mickey's Planning Pal</p>
-                            <p>Hello! I'm here to help you plan the most magical family Christmas in Orlando. What's on your mind today? Ask me about park strategies, Christmas events, or even dining reservations!</p>
-                        </div>
-                    </div>
-                    
-                    <!-- Input -->
-                    <div class="flex space-x-3">
-                        <input type="text" id="gpt-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Ask a question about the trip...">
-                        <button id="gpt-send-button" onclick="sendGptQuery()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md disabled:opacity-50">
-                            Ask Pal
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Info Box -->
-                <div class="lg:w-1/3 bg-yellow-100 p-5 rounded-xl shadow-md border border-yellow-300">
-                    <h3 class="text-xl font-bold text-yellow-800 mb-3">Grounding Sources</h3>
-                    <div id="gpt-sources" class="text-sm text-yellow-700 space-y-2">
-                        <p>Sources for the Pal's advice will appear here when Google Search is used for grounding.</p>
-                    </div>
-                </div>
-            </div>
-            
-        </div>
-
     </div>
 
     <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, addDoc, setDoc, onSnapshot, collection, query, orderBy, serverTimestamp, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // Turn on debug logging for Firestore
-        // setLogLevel('Debug');
-
         // --- GLOBAL VARIABLES & INITIAL SETUP ---
-        // Global variables provided by the Canvas environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-orlando-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initialAuthToken : null;
         
+        // 1. INTERNAL PREVIEW CONFIG (Available inside this editor)
+        // We check if we are running inside the Canvas environment to avoid the "Missing Config" error while previewing.
+        const internalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const internalAppId = typeof __app_id !== 'undefined' ? __app_id : null;
+        const internalAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // 2. EXTERNAL DEPLOYMENT CONFIG (For GitHub Pages)
+        // >>> ACTION REQUIRED FOR GITHUB <<<
+        // Replace these values with your Firebase Project keys when deploying to GitHub.
+        const MANUAL_FIREBASE_CONFIG = {
+            apiKey: "AIzaSyDoI1tIeSZw_ccBGPIGIfF2h30S3o9negU", // <-- REPLACE THIS VALUE
+            authDomain: "orlando-2025-c9a88.firebaseapp.com", 
+            projectId: "orlando-2025-c9a88",
+            storageBucket: "orlando-2025-c9a88.firebasestorage.app",
+            messagingSenderId: "576935089586",
+            appId: "1:576935089586:web:b2822131481acf724f00ab"
+        };
+
+        // LOGIC: Prefer Internal Config (for immediate preview), fall back to Manual (for external site)
+        let firebaseConfig;
+        let appId;
+        let isInternalEnv = false;
+
+        if (internalConfig) {
+            // We are in the preview environment
+            firebaseConfig = internalConfig;
+            appId = internalAppId || 'default-app-id';
+            isInternalEnv = true;
+        } else {
+            // We are on GitHub Pages (or local file)
+            firebaseConfig = MANUAL_FIREBASE_CONFIG;
+            appId = "orlando-trip-app-prod"; 
+            isInternalEnv = false;
+        }
+
         let app;
         let db;
         let auth;
         let userId = 'loading';
         
-        // The list of family members for the spreadsheet columns (UPDATED AGES FOR JOEY AND EMMA)
+        // The list of family members for the spreadsheet columns
         const FAMILY_MEMBERS = [
             { id: "Marc", name: "Marc Blair", age: 43 },
             { id: "Melissa", name: "Melissa Blair", age: 39 },
@@ -264,21 +217,311 @@
             { id: "Mimi", name: "Mimi Blair", age: 6 },
             { id: "Daniel", name: "Daniel Rosenberg", age: 39 },
             { id: "Jessica", name: "Jessica Blair", age: 37 },
-            { id: "Joey", name: "Joey Rosenberg", age: 5 }, // AGE UPDATED
-            { id: "Emma", name: "Emma Rosenberg", age: 7 }, // AGE UPDATED
+            { id: "Joey", name: "Joey Rosenberg", age: 5 }, 
+            { id: "Emma", name: "Emma Rosenberg", age: 7 }, 
             { id: "Riley", name: "Riley Rosenberg", age: 1 },
             { id: "John", name: "John Blair", age: 71 },
             { id: "Lindsay", name: "Lindsay Blair", age: 70 },
             { id: "Ricky", name: "Ricky Blair", age: 41 },
         ];
 
+        // The rows/activities planned for the trip
+        const ACTIVITY_ROWS = [
+            { id: 'day1-am', name: 'Dec 22: Morning (Arrivals)' },
+            { id: 'day1-pm', name: 'Dec 22: Afternoon/Evening' },
+            { id: 'day2-am', name: 'Dec 23: Epcot Morning' },
+            { id: 'day2-pm', name: 'Dec 23: Epcot Evening' },
+            { id: 'day3-am', name: 'Dec 24: Animal Kingdom' },
+            { id: 'day3-pm', name: 'Dec 24: Christmas Eve Dinner' },
+            { id: 'day4-am', name: 'Dec 25: Christmas Morning' },
+            { id: 'day4-pm', name: 'Dec 25: Holiday Dinner' },
+        ];
+
+
         const ITINERARY_DOC_PATH = `artifacts/${appId}/public/data/orlando_planning/itinerary`;
         const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
-        
+
+        // --- UI UTILITIES ---
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
+
+            document.getElementById(`${tabId}-content`).classList.remove('hidden');
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+        }
+
+        // --- FIRESTORE UTILITIES ---
+
+        function getItineraryDocRef() {
+            return doc(db, ITINERARY_DOC_PATH);
+        }
+
+        function getChatCollectionRef() {
+            return collection(db, CHAT_COLLECTION_PATH);
+        }
+
+        // --- ITINERARY LOGIC (SPREADSHEET) ---
+
+        /**
+         * Renders the initial structure of the spreadsheet (headers and cells).
+         */
+        function renderItineraryStructure() {
+            const grid = document.getElementById('itinerary-grid');
+            grid.innerHTML = ''; // Clear existing content
+
+            // 1. Render Header Row
+            let headerHtml = `<div class="grid-header grid-header-day">Activity</div>`;
+            FAMILY_MEMBERS.forEach(member => {
+                headerHtml += `<div class="grid-header text-center">${member.name} (${member.age})</div>`;
+            });
+            grid.insertAdjacentHTML('beforeend', headerHtml);
+
+            // 2. Render Activity Rows
+            ACTIVITY_ROWS.forEach(row => {
+                let rowHtml = `<div class="grid-cell grid-cell-day">${row.name}</div>`;
+                FAMILY_MEMBERS.forEach(member => {
+                    // Unique ID for each cell: activityId_memberId
+                    const cellId = `${row.id}_${member.id}`;
+                    rowHtml += `
+                        <div class="grid-cell" id="cell-${cellId}">
+                            <textarea 
+                                class="grid-input" 
+                                id="input-${cellId}"
+                                data-activity-id="${row.id}" 
+                                data-member-id="${member.id}"
+                                oninput="updateItineraryCell(this.dataset.activityId, this.dataset.memberId, this.value)"
+                            ></textarea>
+                        </div>
+                    `;
+                });
+                grid.insertAdjacentHTML('beforeend', rowHtml);
+            });
+        }
+
+        /**
+         * Fills the spreadsheet with data from Firestore.
+         * @param {Object} data - The itinerary data object.
+         */
+        function populateItineraryData(data) {
+            ACTIVITY_ROWS.forEach(row => {
+                FAMILY_MEMBERS.forEach(member => {
+                    const cellId = `${row.id}_${member.id}`;
+                    const inputElement = document.getElementById(`input-${cellId}`);
+                    
+                    if (inputElement) {
+                        // Data structure: { "day1-am": { "Marc": "Content" } }
+                        const content = data[row.id] && data[row.id][member.id] !== undefined ? data[row.id][member.id] : '';
+                        inputElement.value = content;
+                    }
+                });
+            });
+        }
+
+        /**
+         * Saves a single cell update to Firestore. Uses debouncing for efficiency.
+         * @param {string} activityId - The ID of the activity row.
+         * @param {string} memberId - The ID of the family member column.
+         * @param {string} value - The new cell content.
+         */
+        const updateDebounceMap = new Map();
+        function updateItineraryCell(activityId, memberId, value) {
+            if (!db || userId === 'loading') return;
+
+            // Clear previous timeout for this cell
+            if (updateDebounceMap.has(`${activityId}_${memberId}`)) {
+                clearTimeout(updateDebounceMap.get(`${activityId}_${memberId}`));
+            }
+
+            // Set new timeout
+            const timeout = setTimeout(async () => {
+                const docRef = getItineraryDocRef();
+                
+                // Firestore uses dot notation to update nested fields without overwriting
+                const fieldPath = `${activityId}.${memberId}`;
+                const updateObject = {
+                    [fieldPath]: value,
+                    lastUpdatedBy: userId,
+                    timestamp: serverTimestamp()
+                };
+
+                try {
+                    await setDoc(docRef, updateObject, { merge: true });
+                    // Visual confirmation
+                    const cellElement = document.getElementById(`cell-${activityId}_${memberId}`);
+                    if (cellElement) {
+                        cellElement.classList.add('bg-green-100');
+                        setTimeout(() => cellElement.classList.remove('bg-green-100'), 500);
+                    }
+
+                } catch (e) {
+                    console.error("Error updating document: ", e);
+                    document.getElementById('auth-status').textContent = `Save Error: ${e.message}`;
+                }
+            }, 750); // 750ms debounce time
+
+            updateDebounceMap.set(`${activityId}_${memberId}`, timeout);
+        }
+
+        /**
+         * Initializes the itinerary document in Firestore if it doesn't exist.
+         */
+        async function initializeItinerary() {
+            if (!db) return;
+
+            const docRef = getItineraryDocRef();
+            try {
+                const docSnap = await getDoc(docRef);
+                if (!docSnap.exists()) {
+                    // Create an initial, empty structure
+                    const initialData = {
+                        itinerary: "Orlando Trip Plan",
+                        lastUpdatedBy: userId,
+                        timestamp: serverTimestamp()
+                    };
+                    
+                    // Initialize nested objects for each activity row
+                    ACTIVITY_ROWS.forEach(row => {
+                        initialData[row.id] = {};
+                        FAMILY_MEMBERS.forEach(member => {
+                             initialData[row.id][member.id] = '';
+                        });
+                    });
+
+                    await setDoc(docRef, initialData, { merge: true });
+                    console.log("Itinerary document created.");
+                }
+            } catch (e) {
+                console.error("Error initializing itinerary:", e);
+            }
+        }
+
+        // --- CHAT LOGIC ---
+
+        /**
+         * Handles sending a new chat message.
+         */
+        async function sendChatMessage(event) {
+            event.preventDefault();
+            if (!db || userId === 'loading') return;
+
+            const chatInput = document.getElementById('chat-input');
+            const message = chatInput.value.trim();
+
+            if (message) {
+                try {
+                    await addDoc(getChatCollectionRef(), {
+                        text: message,
+                        senderId: userId,
+                        timestamp: serverTimestamp()
+                    });
+                    chatInput.value = ''; // Clear input field
+                } catch (e) {
+                    console.error("Error sending message: ", e);
+                    document.getElementById('auth-status').textContent = `Chat Error: ${e.message}`;
+                }
+            }
+        }
+
+        /**
+         * Renders all chat messages.
+         * @param {Array<Object>} messages - Array of chat message objects.
+         */
+        function renderChatMessages(messages) {
+            const chatMessagesDiv = document.getElementById('chat-messages');
+            chatMessagesDiv.innerHTML = ''; // Clear existing
+
+            messages.forEach(msg => {
+                const isMine = msg.senderId === userId;
+                const alignment = isMine ? 'justify-end' : 'justify-start';
+                const colorClass = isMine ? 'message-mine' : 'message-other';
+                
+                const timestamp = msg.timestamp && msg.timestamp.toDate ? 
+                    msg.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 
+                    'Sending...';
+
+                const messageHtml = `
+                    <div class="flex ${alignment}">
+                        <div class="chat-message ${colorClass} shadow-sm">
+                            <div class="chat-sender text-gray-500">
+                                ${isMine ? 'You' : msg.senderId.substring(0, 8)} (${timestamp})
+                            </div>
+                            <div class="text-gray-900">${msg.text}</div>
+                        </div>
+                    </div>
+                `;
+                chatMessagesDiv.insertAdjacentHTML('beforeend', messageHtml);
+            });
+
+            // Auto-scroll to the bottom (since we use flex-col-reverse, this means scrolling to the top of the container)
+            const chatContainer = document.getElementById('chat-container');
+            if (chatContainer) {
+                chatContainer.scrollTop = chatContainer.scrollHeight; 
+            }
+        }
+
+        // --- REALTIME LISTENERS ---
+
+        function setupRealtimeListeners() {
+            if (!db) return;
+
+            // 1. Itinerary Listener
+            const docRef = getItineraryDocRef();
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    populateItineraryData(docSnap.data());
+                } else {
+                    console.log("Itinerary document does not exist, initializing...");
+                }
+            }, (error) => {
+                console.error("Itinerary Snapshot Error: ", error);
+            });
+
+            // 2. Chat Listener
+            const chatQuery = query(getChatCollectionRef(), orderBy("timestamp", "desc"));
+            onSnapshot(chatQuery, (querySnapshot) => {
+                const messages = [];
+                querySnapshot.forEach(doc => {
+                    messages.push(doc.data());
+                });
+                // Reverse the order to display newest message at the bottom
+                renderChatMessages(messages.reverse()); 
+            }, (error) => {
+                console.error("Chat Snapshot Error: ", error);
+            });
+        }
+
         // --- AUTHENTICATION & INITIALIZATION ---
 
         function initializeFirebase() {
-            if (Object.keys(firebaseConfig).length > 0) {
+            // Logic to verify if we have a valid configuration
+            // 1. Internal Environment
+            if (isInternalEnv) {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('current-user-id').textContent = userId;
+                        document.getElementById('auth-status').textContent = `Authenticated (Internal) User: ${userId}`;
+                        setupRealtimeListeners();
+                        initializeItinerary();
+                    } else {
+                         // Try custom token sign in if available, else anonymous
+                         if (internalAuthToken) {
+                             signInWithCustomToken(auth, internalAuthToken).catch(err => console.error("Token Auth Fail", err));
+                         } else {
+                             signInAnonymously(auth).catch(err => console.error("Anon Auth Fail", err));
+                         }
+                    }
+                });
+                return;
+            }
+
+            // 2. External Environment (GitHub Pages)
+            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
@@ -287,431 +530,37 @@
                     if (user) {
                         userId = user.uid;
                         document.getElementById('current-user-id').textContent = userId;
-                        document.getElementById('auth-status').textContent = `Authenticated User ID: ${userId}`;
-                        // Start real-time listeners only after authentication
+                        document.getElementById('auth-status').textContent = `Authenticated (External) User: ${userId}`;
                         setupRealtimeListeners();
                         initializeItinerary();
                     } else {
-                        // Attempt to sign in
+                        // External: Always anonymous
                         try {
-                            if (initialAuthToken) {
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } else {
-                                await signInAnonymously(auth);
-                            }
+                            await signInAnonymously(auth);
                         } catch (error) {
                             console.error("Firebase Auth failed:", error);
                             document.getElementById('auth-status').textContent = `Authentication failed. ${error.message}`;
-                            userId = crypto.randomUUID(); // Fallback for userId in a public context
-                            document.getElementById('current-user-id').textContent = userId;
-                            setupRealtimeListeners();
-                            initializeItinerary();
                         }
                     }
                 });
             } else {
-                console.error("Firebase config is missing. Data persistence will not work.");
-                document.getElementById('auth-status').textContent = "⚠️ Offline Mode: Data will not be saved.";
-            }
-        }
-
-        // --- ITINERARY / SPREADSHEET LOGIC ---
-
-        function setupRealtimeListeners() {
-            if (!db) return;
-            
-            // 1. Listen for Itinerary Changes
-            onSnapshot(doc(db, ITINERARY_DOC_PATH), (docSnap) => {
-                const data = docSnap.data();
-                if (data && data.items) {
-                    renderItinerary(data.items);
-                }
-            }, (error) => {
-                console.error("Error listening to itinerary:", error);
-            });
-
-            // 2. Listen for Chat/Suggestions Changes
-            const q = query(collection(db, CHAT_COLLECTION_PATH), orderBy("timestamp", "asc"));
-            onSnapshot(q, (snapshot) => {
-                renderChat(snapshot.docs.map(d => d.data()));
-            }, (error) => {
-                console.error("Error listening to chat:", error);
-            });
-        }
-        
-        // Initial setup for the itinerary document if it doesn't exist
-        async function initializeItinerary() {
-            if (!db) return;
-            const docRef = doc(db, ITINERARY_DOC_PATH);
-            const docSnap = await getDoc(docRef);
-
-            if (!docSnap.exists() || !docSnap.data().items || docSnap.data().items.length === 0) {
-                const initialItinerary = [
-                    createItineraryItem("Dec 22", "Mickey's Very Merry Christmas Party (MK)", 1200, "Booked", "Marc, Melissa, Billie, Mimi, Daniel, Jessica, Joey, Emma, Ricky"),
-                    createItineraryItem("Dec 23, AM", "Epcot Festival of the Holidays", 300, "Planned", "All adults and older kids"),
-                    createItineraryItem("Dec 23, PM", "Resort Pool & Kids Club", 0, "Confirmed", "Everyone"),
-                    createItineraryItem("Dec 24", "Animal Kingdom & Tree of Life Awakenings", 700, "Planned", "Marc, Melissa, Billie, Mimi, Daniel, Jessica, Joey, Emma, Ricky"),
-                    createItineraryItem("Dec 25", "Christmas Morning (Hotel), Lunch at Bull & Bear", 500, "Booked", "All 12 family members"),
-                ];
-                await setDoc(docRef, { items: initialItinerary });
-            }
-        }
-
-        function createItineraryItem(date, activity, cost, status, attendeesText) {
-            const attendees = {};
-            const attendeeNames = attendeesText.split(', ').map(name => name.split(' ')[0]);
-            
-            FAMILY_MEMBERS.forEach(member => {
-                attendees[member.id] = attendeeNames.includes(member.id) ? 'Y' : 'N';
-            });
-
-            return {
-                id: crypto.randomUUID(),
-                date: date,
-                activity: activity,
-                cost: cost,
-                status: status,
-                attendees: attendees,
-            };
-        }
-
-        function renderItinerary(items) {
-            const tableBody = document.getElementById('itinerary-table-body');
-            tableBody.innerHTML = '';
-            
-            // Store the current itinerary state globally for updates
-            window.currentItineraryItems = items;
-
-            items.forEach((item, rowIndex) => {
-                const row = tableBody.insertRow();
-                row.className = 'border-t hover:bg-red-50 transition duration-100';
-
-                // Core fields (editable)
-                const coreFields = ['date', 'activity', 'cost', 'status'];
-                coreFields.forEach((field, colIndex) => {
-                    const cell = row.insertCell();
-                    cell.className = `spreadsheet-cell ${colIndex === 0 ? 'sticky left-0 bg-white shadow-sm font-semibold' : ''} text-sm whitespace-nowrap`;
-                    cell.setAttribute('contenteditable', 'true');
-                    cell.dataset.id = item.id;
-                    cell.dataset.field = field;
-                    cell.textContent = item[field] || '';
-                    cell.addEventListener('blur', handleCellEdit);
-                    cell.addEventListener('keydown', handleKeydown);
-                });
-
-                // Attendee fields (editable Y/N)
-                FAMILY_MEMBERS.forEach(member => {
-                    const cell = row.insertCell();
-                    cell.className = 'spreadsheet-cell text-center text-sm font-mono cursor-pointer';
-                    cell.dataset.id = item.id;
-                    cell.dataset.field = `attendees.${member.id}`;
-                    cell.textContent = item.attendees[member.id] || 'N';
-                    cell.classList.toggle('bg-green-100', item.attendees[member.id] === 'Y');
-                    cell.classList.toggle('text-green-700', item.attendees[member.id] === 'Y');
-                    cell.classList.toggle('text-gray-400', item.attendees[member.id] === 'N');
-                    cell.addEventListener('click', handleAttendeeToggle);
-                });
-            });
-        }
-
-        // Add a new blank row to the itinerary
-        window.addItineraryRow = async function() {
-            if (!db) return;
-            const newItem = createItineraryItem('Date?', 'New Activity...', 0, 'Idea', '');
-            const newItems = [...(window.currentItineraryItems || []), newItem];
-            try {
-                const docRef = doc(db, ITINERARY_DOC_PATH);
-                await setDoc(docRef, { items: newItems });
-                // Firestore listener will call renderItinerary()
-            } catch (e) {
-                console.error("Error adding document: ", e);
+                // 3. Missing Config
+                console.error("Firebase config is missing or incomplete. Data persistence will not work.");
+                document.getElementById('auth-status').textContent = "⚠️ OFFLINE MODE: Please update Firebase config in index.html.";
             }
         }
         
-        // Handles contenteditable cell changes
-        async function handleCellEdit(event) {
-            if (!db) return;
-            const target = event.target;
-            const id = target.dataset.id;
-            const field = target.dataset.field;
-            const value = target.textContent.trim();
+        // --- EVENT LISTENERS ---
+
+        window.onload = function() {
+            renderItineraryStructure();
+            initializeFirebase();
             
-            if (!id || !field) return;
-
-            const updatedItems = window.currentItineraryItems.map(item => {
-                if (item.id === id) {
-                    return { ...item, [field]: field === 'cost' ? parseFloat(value) || 0 : value };
-                }
-                return item;
-            });
-            
-            try {
-                const docRef = doc(db, ITINERARY_DOC_PATH);
-                await setDoc(docRef, { items: updatedItems });
-            } catch (e) {
-                console.error("Error updating document: ", e);
-            }
-        }
-
-        // Handles Enter key press to mimic spreadsheet behavior
-        function handleKeydown(event) {
-            if (event.key === 'Enter') {
-                event.preventDefault(); // Prevent new line
-                event.target.blur(); // Trigger blur event to save
-            }
-        }
-
-        // Handles Y/N attendee toggle
-        async function handleAttendeeToggle(event) {
-            if (!db) return;
-            const target = event.target;
-            const id = target.dataset.id;
-            const field = target.dataset.field; // e.g., attendees.Marc
-
-            if (!id || !field || !field.startsWith('attendees.')) return;
-
-            const memberId = field.split('.')[1];
-            const currentValue = target.textContent === 'Y' ? 'N' : 'Y';
-
-            const updatedItems = window.currentItineraryItems.map(item => {
-                if (item.id === id) {
-                    return { 
-                        ...item, 
-                        attendees: { 
-                            ...item.attendees, 
-                            [memberId]: currentValue 
-                        } 
-                    };
-                }
-                return item;
-            });
-
-            try {
-                const docRef = doc(db, ITINERARY_DOC_PATH);
-                await setDoc(docRef, { items: updatedItems });
-            } catch (e) {
-                console.error("Error updating document: ", e);
-            }
-        }
-
-
-        // --- CHAT / SUGGESTION LOGIC ---
-
-        function renderChat(messages) {
-            const chatLog = document.getElementById('chat-messages');
-            chatLog.innerHTML = '';
-            
-            if (messages.length === 0) {
-                chatLog.innerHTML = '<p class="text-center text-gray-500 py-4">No suggestions yet! Be the first to post.</p>';
-            }
-
-            messages.forEach(msg => {
-                const messageElement = document.createElement('div');
-                messageElement.className = 'mb-3 p-3 rounded-lg shadow-sm';
-                
-                const isMine = msg.userId === userId;
-
-                if (isMine) {
-                    messageElement.classList.add('bg-red-100', 'ml-auto', 'max-w-[90%]');
-                } else {
-                    messageElement.classList.add('bg-white', 'mr-auto', 'max-w-[90%]');
-                }
-
-                // Format timestamp
-                const date = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
-                const timeString = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                const dateString = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                
-                messageElement.innerHTML = `
-                    <p class="text-xs ${isMine ? 'text-red-700' : 'text-gray-500'} font-semibold mb-1">
-                        ${msg.userName} <span class="text-gray-400">(${msg.userId.substring(0, 4)}...)</span>
-                        <span class="float-right text-gray-400 font-normal">${dateString} ${timeString}</span>
-                    </p>
-                    <p class="text-gray-800 whitespace-pre-wrap">${msg.text}</p>
-                `;
-                chatLog.appendChild(messageElement);
-            });
-            chatLog.scrollTop = chatLog.scrollHeight; // Scroll to bottom
-        }
-
-        window.sendMessage = async function() {
-            if (!db) return;
-            const chatInput = document.getElementById('chat-input');
-            const messageText = chatInput.value.trim();
-
-            if (messageText === "") return;
-
-            const user = auth.currentUser;
-            const userName = user && user.isAnonymous ? 'Guest Planner' : (user ? user.displayName || FAMILY_MEMBERS.find(m => m.id === userId)?.name || 'Anon Planner' : 'Guest Planner');
-
-            try {
-                await addDoc(collection(db, CHAT_COLLECTION_PATH), {
-                    userId: userId,
-                    userName: userName,
-                    text: messageText,
-                    timestamp: serverTimestamp(),
-                });
-                chatInput.value = '';
-            } catch (e) {
-                console.error("Error adding chat message: ", e);
-            }
-        }
+            // Set up chat form listener
+            document.getElementById('chat-form').addEventListener('submit', sendChatMessage);
+        };
         
-        // --- GEMINI GPT LOGIC ---
-        
-        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=";
-        const GEMINI_SYSTEM_PROMPT = `
-            You are 'Mickey's Planning Pal,' a cheerful, family-focused, and knowledgeable expert on Walt Disney World Orlando, specifically for a large family traveling during the Christmas season. 
-            The family is staying at the Waldorf Astoria Orlando. 
-            Your advice should be practical and fun, focusing on:
-            1. Christmas events (Mickey's Very Merry Christmas Party, EPCOT Festival of the Holidays).
-            2. Park strategy for multiple generations, including small children (Riley, 1; Joey, 5; Emma, 7) and seniors (John, 71, Lindsay, 70).
-            3. Tips about staying at the Waldorf Astoria (shuttle, lazy river access, Kids Club for Billie (10) and Mimi (6)).
-            Keep your responses concise, friendly, and focused on magic and collaboration. Use relevant Disney emojis. Always use Google Search to ground your answers in real-time information.
-        `;
-        
-        // Utility function for exponential backoff
-        async function fetchWithBackoff(url, options, maxRetries = 5) {
-            for (let i = 0; i < maxRetries; i++) {
-                try {
-                    const response = await fetch(url, options);
-                    if (response.ok) {
-                        return response;
-                    }
-                    if (response.status === 429) { // Too Many Requests
-                        const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                        continue;
-                    }
-                    throw new Error(`API returned status ${response.status}`);
-                } catch (error) {
-                    if (i === maxRetries - 1) {
-                        throw error;
-                    }
-                    const delay = Math.pow(2, i) * 1000 + Math.random() * 1000;
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
-            }
-        }
-        
-        window.sendGptQuery = async function() {
-            const inputElement = document.getElementById('gpt-input');
-            const sendButton = document.getElementById('gpt-send-button');
-            const chatLog = document.getElementById('gpt-chat-log');
-            const sourcesDiv = document.getElementById('gpt-sources');
-            const userQuery = inputElement.value.trim();
-
-            if (!userQuery) return;
-
-            // 1. Display user message
-            appendMessage(chatLog, userQuery, 'user');
-            inputElement.value = '';
-            sendButton.disabled = true;
-            sourcesDiv.innerHTML = '<p class="text-sm text-gray-500">Thinking... 🧠✨</p>';
-
-            // 2. Prepare payload
-            const payload = {
-                contents: [{ parts: [{ text: userQuery }] }],
-                tools: [{ "google_search": {} }],
-                systemInstruction: { parts: [{ text: GEMINI_SYSTEM_PROMPT }] },
-            };
-
-            const options = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            };
-
-            // 3. Call API with backoff
-            try {
-                const response = await fetchWithBackoff(GEMINI_API_URL, options);
-                const result = await response.json();
-                
-                const candidate = result.candidates?.[0];
-                let text = "Sorry, I couldn't get a response from the Pal right now. Try again!";
-                let sources = [];
-                
-                if (candidate && candidate.content?.parts?.[0]?.text) {
-                    text = candidate.content.parts[0].text;
-                    
-                    const groundingMetadata = candidate.groundingMetadata;
-                    if (groundingMetadata && groundingMetadata.groundingAttributions) {
-                        sources = groundingMetadata.groundingAttributions
-                            .map(attribution => ({
-                                uri: attribution.web?.uri,
-                                title: attribution.web?.title,
-                            }))
-                            .filter(source => source.uri && source.title);
-                    }
-                }
-                
-                // 4. Display AI response and sources
-                appendMessage(chatLog, text, 'ai');
-                renderSources(sources, sourcesDiv);
-
-            } catch (error) {
-                console.error("Gemini API call failed:", error);
-                appendMessage(chatLog, "Uh oh! The magic wand isn't working right now. Try asking again!", 'ai');
-                sourcesDiv.innerHTML = '<p class="text-sm text-red-600">Connection Error.</p>';
-            } finally {
-                sendButton.disabled = false;
-            }
-        }
-        
-        function appendMessage(chatLog, text, role) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `p-3 rounded-lg shadow-sm mb-3 whitespace-pre-wrap`;
-            
-            if (role === 'user') {
-                msgDiv.classList.add('bg-red-100', 'ml-auto', 'max-w-[90%]');
-                msgDiv.innerHTML = `<p class="text-xs text-red-700 font-semibold mb-1">You</p><p class="text-gray-800">${text}</p>`;
-            } else {
-                msgDiv.classList.add('bg-white', 'mr-auto', 'max-w-[90%]', 'border', 'border-gray-200');
-                msgDiv.innerHTML = `<p class="text-xs text-blue-600 font-semibold mb-1">Mickey's Planning Pal 🐭</p><p class="text-gray-800">${text}</p>`;
-            }
-            chatLog.appendChild(msgDiv);
-            chatLog.scrollTop = chatLog.scrollHeight;
-        }
-
-        function renderSources(sources, sourcesDiv) {
-            if (sources.length === 0) {
-                sourcesDiv.innerHTML = '<p class="text-sm text-yellow-700">No external sources used for this tip.</p>';
-                return;
-            }
-            
-            const list = document.createElement('ul');
-            list.className = 'list-disc list-inside space-y-1';
-            sourcesDiv.innerHTML = '<h3 class="text-base font-semibold text-yellow-800 mb-2">Sources Used:</h3>';
-            
-            sources.forEach(source => {
-                const item = document.createElement('li');
-                item.className = 'text-xs';
-                item.innerHTML = `<a href="${source.uri}" target="_blank" class="text-blue-600 hover:text-blue-800 underline">${source.title || source.uri}</a>`;
-                list.appendChild(item);
-            });
-            sourcesDiv.appendChild(list);
-        }
-
-        // --- UI UTILITIES ---
-
-        window.showTab = function(tabName) {
-            document.querySelectorAll('.tab-content').forEach(div => {
-                div.classList.add('hidden');
-            });
-            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
-
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active', 'bg-red-50', 'text-red-700');
-                btn.classList.add('hover:text-red-600');
-            });
-            const activeButton = document.querySelector(`.tab-button[data-tab="${tabName}"]`);
-            activeButton.classList.add('active', 'bg-red-50', 'text-red-700');
-            activeButton.classList.remove('hover:text-red-600');
-        }
-
-        // --- RUN APP ---
-        window.onload = initializeFirebase;
-
     </script>
+
 </body>
 </html>
