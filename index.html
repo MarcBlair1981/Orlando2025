@@ -231,7 +231,7 @@
                     <!-- Input -->
                     <div class="flex space-x-3">
                         <input type="text" id="gpt-input" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500" placeholder="Ask a question about the trip...">
-                        <button id="gpt-send-button" onclick="sendGptQuery()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 shadow-md disabled:opacity-50">
+                        <button id="gpt-send-button" onclick="sendGptQuery()" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-150 disabled:opacity-50">
                             Ask Pal
                         </button>
                     </div>
@@ -253,7 +253,11 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Enable Firebase debugging (helpful for troubleshooting connection/rules)
+        // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // setLogLevel('debug');
         
         // --- GLOBAL CONFIGURATION ---
         
@@ -280,7 +284,12 @@
             // We are on GitHub Pages (or local file)
             firebaseConfig = externalConfig;
             // The projectId is the best unique identifier for external deployment
-            appId = firebaseConfig.projectId || "orlando-trip-app-prod"; 
+            // Check if externalConfig has API key to avoid using dummy config
+            if (firebaseConfig.apiKey) {
+                appId = firebaseConfig.projectId || "orlando-trip-app-prod";
+            } else {
+                 appId = "orlando-trip-app-prod"; // Fallback if external file is missing/empty
+            }
             isInternalEnv = false;
         }
 
@@ -305,6 +314,7 @@
             { id: "Ricky", name: "Ricky Blair", age: 41 },
         ];
 
+        // This path is constant for the public shared itinerary document
         const ITINERARY_DOC_PATH = `artifacts/${appId}/public/data/orlando_planning/itinerary`;
         const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
 
@@ -322,9 +332,9 @@
 
         function initializeFirebase() {
             // 1. Check if we have a valid configuration (checking API key is sufficient)
-            if (!firebaseConfig.apiKey) {
-                console.error("Firebase config is missing or incomplete.");
-                document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Firebase keys missing in firebase-config.js!";
+            if (!firebaseConfig || !firebaseConfig.apiKey) {
+                console.error("Firebase config is missing or incomplete. Using fallback.");
+                document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Firebase keys missing or incomplete!";
                 document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
                 return;
             }
@@ -348,8 +358,9 @@
                     userId = user.uid;
                     document.getElementById('current-user-id').textContent = userId;
                     document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
+                    // *** CRITICAL FIX: Ensure itinerary initialization and listeners start AFTER auth is complete
                     setupRealtimeListeners();
-                    initializeItinerary();
+                    await initializeItinerary(); 
                 } else {
                      if (isInternalEnv && internalAuthToken) {
                          // Internal Preview Auth
@@ -372,17 +383,20 @@
         function setupRealtimeListeners() {
             if (!db) return;
 
-            // 1. Itinerary Listener
+            // 1. Itinerary Listener: Listens for changes to the single document
             onSnapshot(doc(db, ITINERARY_DOC_PATH), (docSnap) => {
                 const data = docSnap.data();
                 if (data && data.items) {
                     renderItinerary(data.items);
+                } else {
+                    // This handles the initial load when the document might not exist yet
+                    renderItinerary([]);
                 }
+            }, (error) => {
+                 console.error("Itinerary snapshot error:", error);
             });
 
             // 2. Chat Listener
-            // Note: We are removing orderBy('timestamp', 'asc') because it often requires a Firestore index which can fail deployment.
-            // Sorting will be done locally after fetching.
             const q = collection(db, CHAT_COLLECTION_PATH); 
             onSnapshot(q, (snapshot) => {
                 const messages = snapshot.docs.map(d => d.data());
@@ -393,6 +407,8 @@
                     return timeA - timeB;
                 });
                 renderChat(messages);
+            }, (error) => {
+                 console.error("Chat snapshot error:", error);
             });
         }
         
@@ -406,6 +422,7 @@
             const docRef = doc(db, ITINERARY_DOC_PATH);
             const docSnap = await getDoc(docRef);
 
+            // If the document does not exist or is empty, populate with initial data
             if (!docSnap.exists() || !docSnap.data() || !docSnap.data().items || docSnap.data().items.length === 0) {
                 const initialItinerary = [
                     createItineraryItem("Dec 22", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
@@ -532,11 +549,24 @@
         }
 
         window.addItineraryRow = async function() {
-            if (!db) return;
+            if (!db) {
+                console.error("Firestore not initialized.");
+                return;
+            }
+            
             const newItem = createItineraryItem('Dec 24', 'Christmas Eve Dinner Idea', 100, 'Idea', '');
+            
+            // *** FIX: Correctly append the new item and update the single document.
             const newItems = [...(window.currentItineraryItems || []), newItem];
-            // Ensure data is saved with correct structure
-            await setDoc(doc(db, ITINERARY_DOC_PATH), { items: newItems });
+            const docRef = doc(db, ITINERARY_DOC_PATH);
+
+            try {
+                 // Update the 'items' array in the single document
+                 await setDoc(docRef, { items: newItems });
+                 console.log("New item added to itinerary.");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+            }
         }
         
         window.deleteItineraryItem = async function(id) {
