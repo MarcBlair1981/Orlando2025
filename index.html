@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     
     <!-- OPTIONAL: Load external config if it exists (for GitHub) -->
-    <!-- This allows you to save your keys in firebase-config.js and never edit this file again! -->
-    <script src="firebase-config.js"></script>
+    <!-- TEMPORARILY COMMENTED OUT - UNCOMMENT ONLY IF YOU HAVE THIS FILE AND CONFIRM IT HAS NO ERRORS -->
+    <!-- <script src="firebase-config.js"></script> -->
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -71,6 +71,8 @@
                 <div id="auth-status" class="text-sm text-green-600 font-semibold">Initializing...</div>
                 <div class="text-xs text-gray-400 mt-1">User ID: <span id="current-user-id">...</span></div>
             </div>
+            <!-- DEBUGGING MESSAGE -->
+            <div id="app-load-status" class="mt-2 text-xs text-blue-600 font-medium">Waiting for window load...</div>
         </header>
 
         <!-- NAVIGATION TABS -->
@@ -326,11 +328,15 @@
         // --- AUTHENTICATION & INITIALIZATION ---
 
         function initializeFirebase() {
+            // DEBUG: Update status right away
+            document.getElementById('app-load-status').textContent = "Firebase initialization starting...";
+
             // 1. Check if we have a valid configuration (checking API key is sufficient)
             if (!firebaseConfig || !firebaseConfig.apiKey) {
                 console.error("Firebase config is missing or incomplete. Using fallback.");
                 document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Firebase keys missing or incomplete!";
                 document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
+                document.getElementById('app-load-status').textContent = "Firebase initialization failed: No API Key.";
                 return;
             }
 
@@ -339,10 +345,12 @@
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
+                document.getElementById('app-load-status').textContent = "Firebase services initialized. Waiting for Auth...";
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
                 document.getElementById('auth-status').textContent = `⚠️ OFFLINE: Initialization failed. ${error.message}`;
                 document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
+                document.getElementById('app-load-status').textContent = `Firebase initialization failed: ${error.message}`;
                 return;
             }
 
@@ -353,6 +361,7 @@
                     userId = user.uid;
                     document.getElementById('current-user-id').textContent = userId;
                     document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
+                    document.getElementById('app-load-status').textContent = "Authentication successful. User ID confirmed.";
                     
                     // CRITICAL: Set ready state and enable UI element
                     isAuthReady = true;
@@ -364,9 +373,11 @@
                 } else {
                      if (isInternalEnv && internalAuthToken) {
                          // Internal Preview Auth
+                         document.getElementById('app-load-status').textContent = "Signing in with Custom Token...";
                          signInWithCustomToken(auth, internalAuthToken).catch(err => console.error("Token Auth Fail", err));
                      } else {
                          // External Auth (Always Anonymous for public deployment)
+                         document.getElementById('app-load-status').textContent = "Signing in Anonymously...";
                          try {
                             await signInAnonymously(auth);
                             document.getElementById('add-item-status').classList.remove('hidden'); // Show waiting message during anon sign-in
@@ -383,17 +394,21 @@
 
         function setupRealtimeListeners() {
             if (!db) return;
+            document.getElementById('app-load-status').textContent = "Setting up real-time Firestore listeners...";
 
             // 1. Itinerary Listener: Listens for changes to the single document
             onSnapshot(doc(db, ITINERARY_DOC_PATH), (docSnap) => {
                 const data = docSnap.data();
                 if (data && data.items) {
                     renderItinerary(data.items);
+                    document.getElementById('app-load-status').textContent = "Itinerary loaded and updated.";
                 } else {
                     renderItinerary([]);
+                    document.getElementById('app-load-status').textContent = "Itinerary data initialized/empty.";
                 }
             }, (error) => {
                  console.error("Itinerary snapshot error:", error);
+                 document.getElementById('app-load-status').textContent = `Itinerary error: ${error.message}`;
             });
 
             // 2. Chat Listener
@@ -407,8 +422,10 @@
                     return timeA - timeB;
                 });
                 renderChat(messages);
+                document.getElementById('app-load-status').textContent = "Chat log updated.";
             }, (error) => {
                  console.error("Chat snapshot error:", error);
+                 document.getElementById('app-load-status').textContent = `Chat error: ${error.message}`;
             });
         }
         
@@ -437,8 +454,10 @@
             if (keyParts.length < 2) return 9999.1; // Handle malformed dates gracefully
             
             // Re-join the first two parts and remove anything in parentheses (like '(Morning)')
-            const key = (keyParts[0] + ' ' + keyParts[1]).replace(/\(.*\)/, '').trim();
-            
+            // FIX: Use a regex replace for robustness.
+            const datePartMatch = dateString.match(/^(Dec \d{1,2})/); 
+            const key = datePartMatch ? datePartMatch[1].trim() : '';
+
             let sortValue = dateMap[key] || 9999;
             
             // Add a small decimal value for AM/PM/time to ensure order within the day
@@ -518,12 +537,20 @@
 
             items.forEach((item) => {
                 // Skip if item is malformed or missing key fields
-                if (!item.date || !item.id) return; 
+                if (!item || !item.date || !item.id) {
+                     console.warn("Skipping malformed itinerary item:", item);
+                     return; 
+                }
 
                 // 1. Insert Date Header for calendar grouping
                 // Only look at the month and day (e.g., "Dec 23") for the header grouping
-                const itemDateOnly = item.date.split(' ')[0] + ' ' + item.date.split(' ')[1].replace(/\(.*\)/, '').trim();
-                const lastDateOnly = lastRenderedDate.split(' ')[0] + ' ' + lastRenderedDate.split(' ')[1].replace(/\(.*\)/, '').trim();
+                // FIX: Use robust date parsing for header grouping too
+                const itemDateMatch = item.date.match(/^(Dec \d{1,2})/);
+                const itemDateOnly = itemDateMatch ? itemDateMatch[1].trim() : 'Unknown Date';
+                
+                const lastDateMatch = lastRenderedDate.match(/^(Dec \d{1,2})/);
+                const lastDateOnly = lastDateMatch ? lastDateMatch[1].trim() : '';
+
 
                 if (itemDateOnly !== lastDateOnly) {
                     const headerRow = tableBody.insertRow();
@@ -548,7 +575,7 @@
                     let isEditable = true;
                     
                     if (field === 'cost') {
-                       cellContent = `$${(parseFloat(cellContent) || 0).toFixed(2)}`;
+                       cellContent = `$${(parseFloat(item[field]) || 0).toFixed(2)}`;
                        cell.dataset.rawValue = item[field];
                        cell.classList.add('text-right', 'font-mono');
                     }
@@ -572,7 +599,7 @@
                     cell.dataset.id = item.id;
                     cell.dataset.field = `attendees.${member.id}`;
                     
-                    const isAttending = item.attendees[member.id] === 'Y';
+                    const isAttending = item.attendees && item.attendees[member.id] === 'Y';
                     
                     cell.textContent = isAttending ? '✓' : ''; 
                     
@@ -636,9 +663,14 @@
             const field = target.dataset.field;
             let value = target.textContent.trim();
             
+            // Re-render immediately to show user input, before the database update.
+            // This is purely for perceived performance. The onSnapshot listener will fix 
+            // the state if the database fails or overwrites it.
             if (field === 'cost') {
+                target.textContent = `$${(parseFloat(value.replace(/[^0-9.]/g, '')) || 0).toFixed(2)}`;
                 value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
             }
+
 
             const docRef = doc(db, ITINERARY_DOC_PATH);
 
@@ -659,6 +691,7 @@
                 });
             } catch (e) {
                 console.error("Transaction failed during cell edit:", e);
+                // On failure, rely on the onSnapshot listener to restore the correct data
             }
         }
 
@@ -682,7 +715,7 @@
                     if (!currentItem) return;
                     
                     // Determine the next state (Y/N)
-                    const currentValue = currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
+                    const currentValue = currentItem.attendees && currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
 
                     const updatedItems = currentItems.map(item => {
                         if (item.id === id) {
@@ -787,7 +820,10 @@
         }
 
         // --- BOOTSTRAP ---
-        window.onload = initializeFirebase;
+        window.onload = function() {
+            document.getElementById('app-load-status').textContent = "Window loaded. Initializing Firebase...";
+            initializeFirebase();
+        }
 
     </script>
 </body>
