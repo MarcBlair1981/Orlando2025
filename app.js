@@ -1,4 +1,4 @@
-// --- GLOBAL CONFIGURATION ---
+/ --- GLOBAL CONFIGURATION ---
 
 // 1. INTERNAL PREVIEW CONFIG
 const internalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -109,8 +109,11 @@ function initializeFirebase() {
             if (statusMsg) statusMsg.classList.add('hidden');
 
             setupRealtimeListeners();
-            await initializeItinerary();
-            await initializePackingList(); // Initialize packing list data
+
+            // Don't await these - let them run in background to avoid blocking UI
+            initializeItinerary();
+            initializePackingList();
+
             setupResizableColumns();
             setupDragAndDrop();
         } else {
@@ -167,22 +170,28 @@ function setupRealtimeListeners() {
 async function initializePackingList() {
     if (!db) return;
     const collectionRef = db.collection(PACKING_COLLECTION_PATH);
-    const snapshot = await collectionRef.get();
 
-    if (snapshot.empty) {
-        const initialItems = [
-            { personId: "Marc", item: "Passport", checked: false },
-            { personId: "Marc", item: "Golf Clubs", checked: false },
-            { personId: "Melissa", item: "Sunscreen", checked: false },
-            { personId: "Melissa", item: "Mickey Ears", checked: true },
-            { personId: "Billie", item: "iPad & Charger", checked: false },
-            { personId: "Mimi", item: "Princess Dress", checked: false },
-            { personId: "Riley", item: "Stroller Fan", checked: false },
-            { personId: "Riley", item: "Diapers", checked: false },
-        ];
-        for (const item of initialItems) {
-            await collectionRef.add(item);
+    try {
+        const snapshot = await collectionRef.get();
+        if (snapshot.empty) {
+            const initialItems = [
+                { personId: "Marc", item: "Passport", checked: false },
+                { personId: "Marc", item: "Golf Clubs", checked: false },
+                { personId: "Melissa", item: "Sunscreen", checked: false },
+                { personId: "Melissa", item: "Mickey Ears", checked: true },
+                { personId: "Billie", item: "iPad & Charger", checked: false },
+                { personId: "Mimi", item: "Princess Dress", checked: false },
+                { personId: "Riley", item: "Stroller Fan", checked: false },
+                { personId: "Riley", item: "Diapers", checked: false },
+            ];
+
+            // Use Promise.all for parallel addition
+            const batchPromises = initialItems.map(item => collectionRef.add(item));
+            await Promise.all(batchPromises);
+            console.log("Initialized packing list with default items.");
         }
+    } catch (e) {
+        console.error("Error initializing packing list:", e);
     }
 }
 
@@ -306,7 +315,8 @@ function getPrimarySortValue(dateString) {
         "Dec 18": 1218, "Dec 19": 1219,
         "Dec 20": 1220, "Dec 21": 1221, "Dec 22": 1222, "Dec 23": 1223,
         "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
-        "Dec 28": 1228, "Dec 29": 1229, "Jan 1": 101, "Jan 2": 102
+        "Dec 28": 1228, "Dec 29": 1229, "Dec 30": 1230, "Dec 31": 1231,
+        "Jan 1": 101, "Jan 2": 102
     };
 
     const datePartMatch = dateString.match(/^(Dec \d{1,2}|Jan \d{1,2})/);
@@ -880,4 +890,6 @@ function setupDoubleScroll() {
         }
     });
 }
+
+
 
