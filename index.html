@@ -43,6 +43,29 @@
             outline: 2px solid #fb923c; /* Orange focus ring */
             background-color: white;
         }
+        
+        /* Column Resizing Styles */
+        .resizable-th {
+            position: relative;
+            user-select: none;
+        }
+        .resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 8px;
+            cursor: col-resize;
+            background-color: transparent; /* Invisible by default */
+            transition: background-color 0.1s;
+            z-index: 10;
+        }
+        .resizable-th:hover .resizer {
+            background-color: rgba(255, 255, 255, 0.2); /* Slight visual aid on hover */
+        }
+        .resizing {
+            background-color: #fb923c !important; /* Orange when actively dragging */
+        }
     </style>
 </head>
 <body>
@@ -159,16 +182,25 @@
         <!-- 2. ITINERARY & SPREADSHEET TAB -->
         <div id="tab-itinerary" class="tab-content hidden">
             <h2 class="text-2xl font-bold text-red-700 mb-4">Collaborative Trip Itinerary & Commitment Tracker</h2>
-            <p class="text-sm text-gray-600 mb-4">Click to edit Activity, Cost, or Status. Click a checkmark column to commit to an activity.</p>
+            <p class="text-sm text-gray-600 mb-4">Click to edit Activity or Status. Click a checkmark column to commit to an activity. Drag headers to resize.</p>
             
             <div class="overflow-x-auto rounded-lg shadow-lg">
-                <table class="min-w-full bg-white border-collapse">
+                <table id="itinerary-table" class="min-w-full bg-white border-collapse">
                     <thead>
                         <tr class="bg-red-600 text-white text-sm uppercase tracking-wider sticky top-0 z-10">
-                            <th class="p-3 border-r border-red-700 w-32">Date</th>
-                            <th class="p-3 border-r border-red-700 w-48">Activity / Time</th>
-                            <th class="p-3 border-r border-red-700 w-24">Cost</th>
-                            <th class="p-3 border-r border-red-700 w-24">Status</th>
+                            <!-- NOTE: Added resizer class to headers we want to be resizable -->
+                            <th id="th-date" class="p-3 border-r border-red-700 w-32 resizable-th">
+                                Date
+                                <div class="resizer" data-column="date"></div>
+                            </th>
+                            <th id="th-activity" class="p-3 border-r border-red-700 w-48 resizable-th">
+                                Activity / Time
+                                <div class="resizer" data-column="activity"></div>
+                            </th>
+                            <th id="th-status" class="p-3 border-r border-red-700 w-24 resizable-th">
+                                Status
+                                <div class="resizer" data-column="status"></div>
+                            </th>
                             <!-- Family Members Columns -->
                             <th class="p-3 border-r border-red-700 text-center">Marc (43)</th>
                             <th class="p-3 border-r border-red-700 text-center">Melissa (39)</th>
@@ -255,7 +287,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // CRITICAL FIX: Removed runTransaction import, added getDocs for collection check.
         import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- GLOBAL CONFIGURATION ---
@@ -368,7 +399,8 @@
                     document.getElementById('add-item-status').classList.add('hidden');
                     
                     setupRealtimeListeners();
-                    await initializeItinerary(); 
+                    await initializeItinerary();
+                    setupResizableColumns(); // Initialize column resizing after DOM is ready
                 } else {
                      if (isInternalEnv && internalAuthToken) {
                          // Internal Preview Auth
@@ -475,15 +507,14 @@
             const snapshot = await getDocs(collectionRef);
 
             if (snapshot.empty) {
-                // Initial data with full names "Melissa" and "Lindsay"
+                // Initial data without the cost field, as it was removed from the UI
                 const initialItinerary = [
-                    createItineraryItem("Dec 22 (Arrival)", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
-                    createItineraryItem("Dec 23 (Morning)", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
-                    createItineraryItem("Dec 23 (Evening)", "Epcot Holiday Festival", 150, "Planned", "Marc, Melissa, Daniel, Jessica, Ricky, John, Lindsay"),
+                    createItineraryItem("Dec 22 (Arrival)", "Arrivals / Check-in (after 3PM)", "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
+                    createItineraryItem("Dec 23 (Morning)", "Magic Kingdom Day (Lunch at Be Our Guest)", "Planned", "All"),
+                    createItineraryItem("Dec 23 (Evening)", "Epcot Holiday Festival", "Planned", "Marc, Melissa, Daniel, Jessica, Ricky, John, Lindsay"),
                 ];
                 // Add each item as a separate document in the collection
                 for (const item of initialItinerary) {
-                    // Note: We don't need the `id` property here since addDoc generates one
                     await addDoc(collectionRef, item);
                 }
                 document.getElementById('app-load-status').textContent = "Initial itinerary populated.";
@@ -494,9 +525,9 @@
 
         /**
          * Creates a base itinerary item object without a client-side ID.
-         * The ID will be assigned by Firestore's addDoc.
+         * Note: Cost field is no longer present in the function signature but exists in Firestore if created earlier.
          */
-        function createItineraryItem(date, activity, cost, status, attendeesText) {
+        function createItineraryItem(date, activity, status, attendeesText) {
             const attendees = {};
             // Default everyone to N unless specified 'All'
             const isAll = attendeesText.toLowerCase().includes('all') || attendeesText.toLowerCase().includes('everyone');
@@ -516,12 +547,12 @@
             });
 
             return {
-                // Removed client-side ID generation
                 date: date,
                 activity: activity,
-                cost: cost,
                 status: status,
                 attendees: attendees,
+                // Cost field is preserved in the object but will default to 0 if not set.
+                cost: 0, 
             };
         }
 
@@ -537,7 +568,9 @@
                 const dateB = b.date || ''; 
                 return dateToNumber(dateA) - dateToNumber(dateB);
             });
-
+            
+            // Define which fields are editable (Cost is removed)
+            const editableFields = ['date', 'activity', 'status'];
 
             items.forEach((item) => {
                 if (!item || !item.date || !item.id) {
@@ -557,7 +590,8 @@
                     const headerRow = tableBody.insertRow();
                     headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; 
                     const headerCell = headerRow.insertCell();
-                    headerCell.colSpan = 4 + FAMILY_MEMBERS.length; 
+                    // Colspan updated to reflect removal of Cost column
+                    headerCell.colSpan = editableFields.length + FAMILY_MEMBERS.length; 
                     headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
                     headerCell.textContent = itemDateOnly; 
                     lastRenderedDate = item.date;
@@ -568,30 +602,26 @@
                 row.className = 'border-t hover:bg-red-50 transition duration-100';
 
                 // Core fields
-                ['date', 'activity', 'cost', 'status'].forEach((field) => {
+                editableFields.forEach((field) => {
                     const cell = row.insertCell();
                     
                     let cellContent = item[field] || ''; 
                     let isEditable = true;
                     
-                    if (field === 'cost') {
-                       // Ensure value is treated as a number
-                       const costValue = (parseFloat(item[field]) || 0);
-                       cellContent = `$${costValue.toFixed(2)}`;
-                       cell.dataset.rawValue = costValue;
-                       cell.classList.add('text-right', 'font-mono');
-                    }
-                    
                     if (field === 'date') {
-                        cell.classList.add('font-semibold');
+                        cell.classList.add('font-semibold', 'relative');
+                        // Add special listener for date picker
+                        cell.addEventListener('click', (e) => handleDateCellClick(e, item.id));
+                        cell.setAttribute('contenteditable', 'false'); // Disable standard contenteditable for date
+                        cell.textContent = cellContent;
+                    } else {
+                        cell.className += ' spreadsheet-cell text-sm whitespace-nowrap';
+                        cell.setAttribute('contenteditable', isEditable ? 'true' : 'false');
+                        cell.dataset.id = item.id;
+                        cell.dataset.field = field;
+                        cell.textContent = cellContent;
+                        cell.addEventListener('blur', handleCellEdit);
                     }
-
-                    cell.className += ' spreadsheet-cell text-sm whitespace-nowrap';
-                    cell.setAttribute('contenteditable', isEditable ? 'true' : 'false');
-                    cell.dataset.id = item.id;
-                    cell.dataset.field = field;
-                    cell.textContent = cellContent;
-                    cell.addEventListener('blur', handleCellEdit);
                 });
 
                 // 3. Attendee commitment fields
@@ -616,6 +646,131 @@
             });
         }
 
+        // --- DATE PICKER LOGIC ---
+
+        // Simple helper to convert date string (e.g., "Dec 25 (Xmas)") to YYYY-MM-DD
+        function descriptiveDateToISO(dateString) {
+            if (!dateString) return '';
+            // Basic approximation, assumes year 2025 based on the app title
+            const year = 2025;
+            const monthDayMatch = dateString.match(/Dec (\d{1,2})/);
+            if (monthDayMatch) {
+                const day = monthDayMatch[1].padStart(2, '0');
+                return `${year}-12-${day}`;
+            }
+            return '';
+        }
+
+        // Simple helper to convert YYYY-MM-DD to descriptive date (e.g., "Dec 25")
+        function ISOToDescriptiveDate(isoDate) {
+            if (!isoDate) return '';
+            try {
+                const date = new Date(isoDate + 'T00:00:00'); // Use T00:00:00 to prevent timezone shift issues
+                const month = date.toLocaleString('default', { month: 'short' }); // Dec
+                const day = date.getDate(); // 25
+                return `${month} ${day}`; // Dec 25
+            } catch (e) {
+                return isoDate;
+            }
+        }
+        
+        async function handleDateCellClick(event, id) {
+            const cell = event.currentTarget;
+            if (cell.querySelector('input[type="date"]')) return; // Already editing
+
+            const currentText = cell.textContent.trim();
+            const currentISO = descriptiveDateToISO(currentText);
+
+            // 1. Create and inject the date input
+            const dateInput = document.createElement('input');
+            dateInput.type = 'date';
+            dateInput.className = 'w-full h-full p-0 m-0 border-none bg-transparent focus:ring-0 text-sm font-semibold';
+            dateInput.value = currentISO;
+            
+            // Clear cell and add input
+            cell.textContent = '';
+            cell.appendChild(dateInput);
+            dateInput.focus();
+
+            // 2. Set up event listener for blur (to save)
+            dateInput.addEventListener('blur', async () => {
+                const newISO = dateInput.value;
+                
+                // Remove the input
+                cell.textContent = currentText; // Restore original text initially (listener will update later)
+                dateInput.remove(); 
+                
+                if (newISO && newISO !== currentISO) {
+                    const newDescriptiveDate = ISOToDescriptiveDate(newISO);
+                    
+                    // Add back common activity descriptor for sorting, if it exists
+                    let timeSuffix = '';
+                    if (currentText.toLowerCase().includes('morning')) timeSuffix = ' (Morning)';
+                    else if (currentText.toLowerCase().includes('evening')) timeSuffix = ' (Evening)';
+                    else if (currentText.toLowerCase().includes('arrival')) timeSuffix = ' (Arrival)';
+                    
+                    const finalDateValue = newDescriptiveDate + timeSuffix;
+
+                    try {
+                        const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
+                        await updateDoc(docRef, { date: finalDateValue });
+                    } catch (e) {
+                        console.error("Error updating date:", e);
+                    }
+                }
+            });
+        }
+        
+        // --- COLUMN RESIZING LOGIC ---
+        let currentResizer = null;
+        let startX = 0;
+        let startWidth = 0;
+        let headerElement = null;
+
+        function setupResizableColumns() {
+            const resizers = document.querySelectorAll('.resizer');
+            resizers.forEach(resizer => {
+                resizer.addEventListener('mousedown', handleMouseDown);
+            });
+        }
+
+        function handleMouseDown(e) {
+            currentResizer = e.target;
+            currentResizer.classList.add('resizing');
+            
+            headerElement = currentResizer.parentElement;
+            startX = e.clientX;
+            // Get the current computed width of the header
+            startWidth = headerElement.offsetWidth;
+            
+            // Attach global listeners for mouse move and up
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            
+            e.preventDefault(); // Prevent text selection during drag
+        }
+
+        function handleMouseMove(e) {
+            if (!currentResizer) return;
+            const newWidth = startWidth + (e.clientX - startX);
+            
+            // Ensure a minimum width (e.g., 60px)
+            if (newWidth > 60) {
+                headerElement.style.width = `${newWidth}px`;
+            }
+        }
+
+        function handleMouseUp() {
+            if (currentResizer) {
+                currentResizer.classList.remove('resizing');
+                currentResizer = null;
+                headerElement = null;
+            }
+            // Remove global listeners
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        }
+
         // --- EXPORTED FUNCTIONS (Now use simple addDoc) ---
 
         /**
@@ -631,7 +786,8 @@
             const collectionRef = collection(db, ITINERARY_COLLECTION_PATH);
 
             try {
-                const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
+                // Cost field is no longer displayed, so we don't pass it in the signature
+                const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 'Idea', 'Marc, Melissa'); 
                 await addDoc(collectionRef, newItem);
                 console.log("New item added to itinerary collection successfully.");
 
@@ -644,6 +800,7 @@
 
         /**
          * FIX: Uses updateDoc directly on the specific item document, eliminating transactions.
+         * Cost logic removed.
          */
         async function handleCellEdit(event) {
             if (!db) return;
@@ -652,12 +809,8 @@
             const field = target.dataset.field;
             let value = target.textContent.trim();
             
-            // Handle cost field parsing
-            if (field === 'cost') {
-                value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
-                // Update display to look clean
-                target.textContent = `$${value.toFixed(2)}`;
-            }
+            // Do not run for date cell, as it uses a separate handler
+            if (field === 'date') return;
 
             try {
                 const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
