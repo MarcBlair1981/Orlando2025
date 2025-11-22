@@ -53,7 +53,10 @@
                 data-tab="dashboard">Dashboard</button>
             <button onclick="showTab('itinerary')"
                 class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
-                data-tab="itinerary">Itinerary Planner</button>
+                data-tab="itinerary">Trip Itinerary</button>
+            <button onclick="showTab('packing')"
+                class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
+                data-tab="packing">Packing List</button>
             <button onclick="showTab('chat')"
                 class="tab-button py-3 px-4 md:px-6 text-lg font-medium text-gray-600 hover:text-red-600 rounded-t-lg"
                 data-tab="chat">Group Chat & Ideas</button>
@@ -213,7 +216,19 @@
                 adding items.</p>
         </div>
 
-        <!-- 3. GROUP CHAT & SUGGESTIONS TAB -->
+        <!-- 3. PACKING LIST TAB -->
+        <div id="tab-packing" class="tab-content hidden">
+            <h2 class="text-2xl font-bold text-red-700 mb-4">Family Packing Lists 🧳</h2>
+            <p class="text-sm text-gray-600 mb-4">Add items for each person. Check them off as you pack! (Real-time
+                sync)</p>
+
+            <div id="packing-list-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Packing cards will be dynamically added here -->
+                <div class="text-center col-span-full py-8 text-gray-500">Loading packing lists...</div>
+            </div>
+        </div>
+
+        <!-- 4. GROUP CHAT & SUGGESTIONS TAB -->
         <div id="tab-chat" class="tab-content hidden">
             <h2 class="text-2xl font-bold text-red-700 mb-4">Group Suggestion Box & Chat</h2>
 
@@ -277,5 +292,7 @@
     <!-- App Logic (Standard Script, No Module) -->
     <script src="app.js"></script>
 </body>
+
+</html>
 
 </html>
