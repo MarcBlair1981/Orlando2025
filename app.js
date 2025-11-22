@@ -49,6 +49,7 @@ const FAMILY_MEMBERS = [
 
 const ITINERARY_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_itinerary_items`;
 const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
+const PACKING_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_packing_list`;
 
 // --- UI UTILITIES ---
 // Explicitly attach to window to ensure global availability
@@ -109,6 +110,7 @@ function initializeFirebase() {
 
             setupRealtimeListeners();
             await initializeItinerary();
+            await initializePackingList(); // Initialize packing list data
             setupResizableColumns();
             setupDragAndDrop();
         } else {
@@ -153,6 +155,142 @@ function setupRealtimeListeners() {
         });
         renderChat(messages);
     });
+
+    db.collection(PACKING_COLLECTION_PATH).onSnapshot((snapshot) => {
+        const packingItems = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
+        renderPackingList(packingItems);
+    });
+}
+
+// --- PACKING LIST LOGIC ---
+
+async function initializePackingList() {
+    if (!db) return;
+    const collectionRef = db.collection(PACKING_COLLECTION_PATH);
+    const snapshot = await collectionRef.get();
+
+    if (snapshot.empty) {
+        const initialItems = [
+            { personId: "Marc", item: "Passport", checked: false },
+            { personId: "Marc", item: "Golf Clubs", checked: false },
+            { personId: "Melissa", item: "Sunscreen", checked: false },
+            { personId: "Melissa", item: "Mickey Ears", checked: true },
+            { personId: "Billie", item: "iPad & Charger", checked: false },
+            { personId: "Mimi", item: "Princess Dress", checked: false },
+            { personId: "Riley", item: "Stroller Fan", checked: false },
+            { personId: "Riley", item: "Diapers", checked: false },
+        ];
+        for (const item of initialItems) {
+            await collectionRef.add(item);
+        }
+    }
+}
+
+function renderPackingList(items) {
+    const container = document.getElementById('packing-list-container');
+    if (!container) return;
+    container.innerHTML = '';
+
+    // Group items by person
+    const grouped = {};
+    FAMILY_MEMBERS.forEach(member => {
+        grouped[member.id] = { name: member.name, items: [] };
+    });
+
+    items.forEach(item => {
+        if (grouped[item.personId]) {
+            grouped[item.personId].items.push(item);
+        }
+    });
+
+    Object.keys(grouped).forEach(personId => {
+        const group = grouped[personId];
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-xl shadow-md border border-gray-200 p-4 flex flex-col h-full';
+
+        const header = document.createElement('div');
+        header.className = 'flex items-center justify-between mb-3 border-b pb-2';
+        header.innerHTML = `<h3 class="font-bold text-lg text-gray-800">${group.name}</h3>`;
+        card.appendChild(header);
+
+        const list = document.createElement('ul');
+        list.className = 'flex-grow space-y-2 mb-4 overflow-y-auto max-h-60';
+
+        if (group.items.length === 0) {
+            list.innerHTML = '<li class="text-sm text-gray-400 italic">Nothing added yet.</li>';
+        } else {
+            group.items.sort((a, b) => a.item.localeCompare(b.item)); // Sort alphabetically
+            group.items.forEach(item => {
+                const li = document.createElement('li');
+                li.className = 'flex items-center justify-between group';
+                li.innerHTML = `
+                    <label class="flex items-center cursor-pointer flex-grow">
+                        <input type="checkbox" class="form-checkbox h-4 w-4 text-red-600 rounded border-gray-300 focus:ring-red-500 transition duration-150 ease-in-out" 
+                            ${item.checked ? 'checked' : ''} 
+                            onchange="togglePackingItem('${item.id}', ${!item.checked})">
+                        <span class="ml-2 text-sm ${item.checked ? 'line-through text-gray-400' : 'text-gray-700'}">${item.item}</span>
+                    </label>
+                    <button onclick="deletePackingItem('${item.id}')" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity px-2">
+                        &times;
+                    </button>
+                `;
+                list.appendChild(li);
+            });
+        }
+        card.appendChild(list);
+
+        // Add Item Input
+        const inputGroup = document.createElement('div');
+        inputGroup.className = 'mt-auto pt-2 flex';
+        inputGroup.innerHTML = `
+            <input type="text" id="add-pack-${personId}" placeholder="Add item..." 
+                class="flex-grow text-sm border border-gray-300 rounded-l-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-red-500"
+                onkeydown="if(event.key==='Enter') addPackingItem('${personId}')">
+            <button onclick="addPackingItem('${personId}')" class="bg-red-100 hover:bg-red-200 text-red-700 text-sm font-semibold px-3 py-1 rounded-r-md transition">
+                +
+            </button>
+        `;
+        card.appendChild(inputGroup);
+
+        container.appendChild(card);
+    });
+}
+
+window.addPackingItem = async function (personId) {
+    if (!db) return;
+    const input = document.getElementById(`add-pack-${personId}`);
+    const val = input.value.trim();
+    if (!val) return;
+
+    try {
+        await db.collection(PACKING_COLLECTION_PATH).add({
+            personId: personId,
+            item: val,
+            checked: false
+        });
+        input.value = '';
+    } catch (e) {
+        console.error("Error adding packing item:", e);
+    }
+}
+
+window.togglePackingItem = async function (itemId, checked) {
+    if (!db) return;
+    try {
+        await db.collection(PACKING_COLLECTION_PATH).doc(itemId).update({ checked: checked });
+    } catch (e) {
+        console.error("Error toggling item:", e);
+    }
+}
+
+window.deletePackingItem = async function (itemId) {
+    if (!db) return;
+    if (!confirm("Remove this item?")) return;
+    try {
+        await db.collection(PACKING_COLLECTION_PATH).doc(itemId).delete();
+    } catch (e) {
+        console.error("Error deleting item:", e);
+    }
 }
 
 // --- ITINERARY LOGIC ---
@@ -165,6 +303,7 @@ function getPrimarySortValue(dateString) {
     }
 
     const dateMap = {
+        "Dec 18": 1218, "Dec 19": 1219,
         "Dec 20": 1220, "Dec 21": 1221, "Dec 22": 1222, "Dec 23": 1223,
         "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
         "Dec 28": 1228, "Dec 29": 1229, "Jan 1": 101, "Jan 2": 102
@@ -274,14 +413,12 @@ function renderItinerary(items) {
                     cell.classList.add('font-semibold', 'relative', 'whitespace-nowrap');
                     cell.dataset.groupKey = groupKey;
 
-                    if (group.name !== 'TBC / Future Ideas') {
-                        cell.addEventListener('click', (e) => handleDateCellClick(e, item.id));
-                        cell.setAttribute('contenteditable', 'false');
-                        cell.textContent = cellContent;
-                    } else {
-                        cell.setAttribute('contenteditable', 'false');
-                        cell.textContent = 'TBC';
-                        cell.classList.remove('cursor-pointer');
+                    // ALWAYS allow editing, even for TBC
+                    cell.addEventListener('click', (e) => handleDateCellClick(e, item.id));
+                    cell.setAttribute('contenteditable', 'false');
+                    cell.textContent = cellContent;
+
+                    if (group.name === 'TBC / Future Ideas') {
                         cell.classList.add('bg-gray-100');
                     }
                 } else {
@@ -743,3 +880,4 @@ function setupDoubleScroll() {
         }
     });
 }
+
