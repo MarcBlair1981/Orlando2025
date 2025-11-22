@@ -181,7 +181,6 @@
                             <th class="p-3 border-r border-red-700 text-center">John (71)</th>
                             <th class="p-3 border-r border-red-700 text-center">Lindsay (70)</th>
                             <th class="p-3 border-r border-red-700 text-center">Ricky (41)</th>
-                            <!-- The "Remove" entry has been removed as requested -->
                         </tr>
                     </thead>
                     <tbody id="itinerary-table-body" class="text-gray-700">
@@ -255,7 +254,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // IMPORT FIX: Added runTransaction for atomic updates
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- GLOBAL CONFIGURATION ---
         
@@ -417,16 +417,27 @@
         window.currentItineraryItems = [];
 
         /**
-         * Converts date string (e.g., "Dec 22") to a sortable representation (e.g., "1222")
+         * Converts date string (e.g., "Dec 22 (Arrival)") to a sortable representation (e.g., "1222.0").
+         * Robustly handles null/undefined date strings.
          */
         function dateToNumber(dateString) {
+            // FIX: Add check for null/undefined/empty dateString
+            if (!dateString || typeof dateString !== 'string') {
+                return 9999.0; // Place items without a valid date at the very end
+            }
+            
             const dateMap = {
                 "Dec 20": 1220, "Dec 21": 1221, "Dec 22": 1222, "Dec 23": 1223, 
                 "Dec 24": 1224, "Dec 25": 1225, "Dec 26": 1226, "Dec 27": 1227,
                 "Dec 28": 1228, "Dec 29": 1229
             };
-            // Use the date part (e.g., "Dec 25") for sorting
-            const key = dateString.split(' ')[0] + ' ' + dateString.split(' ')[1].replace(/\(.*\)/, '').trim();
+            
+            // Extract the month and day part (e.g., "Dec 25") by removing time info in parentheses
+            const keyParts = dateString.split(' ');
+            if (keyParts.length < 2) return 9999.1; // Handle malformed dates gracefully
+            
+            // Re-join the first two parts and remove anything in parentheses (like '(Morning)')
+            const key = (keyParts[0] + ' ' + keyParts[1]).replace(/\(.*\)/, '').trim();
             
             let sortValue = dateMap[key] || 9999;
             
@@ -498,11 +509,17 @@
 
             // Sort items by the custom date-time number for correct chronological ordering
             items.sort((a, b) => {
-                return dateToNumber(a.date) - dateToNumber(b.date);
+                // Ensure dateToNumber doesn't fail if date is missing
+                const dateA = a.date || ''; 
+                const dateB = b.date || ''; 
+                return dateToNumber(dateA) - dateToNumber(dateB);
             });
 
 
             items.forEach((item) => {
+                // Skip if item is malformed or missing key fields
+                if (!item.date || !item.id) return; 
+
                 // 1. Insert Date Header for calendar grouping
                 // Only look at the month and day (e.g., "Dec 23") for the header grouping
                 const itemDateOnly = item.date.split(' ')[0] + ' ' + item.date.split(' ')[1].replace(/\(.*\)/, '').trim();
@@ -527,7 +544,7 @@
                 ['date', 'activity', 'cost', 'status'].forEach((field) => {
                     const cell = row.insertCell();
                     
-                    let cellContent = item[field] || '';
+                    let cellContent = item[field] || ''; // Use empty string fallback for display
                     let isEditable = true;
                     
                     if (field === 'cost') {
@@ -567,42 +584,49 @@
                     
                     cell.addEventListener('click', handleAttendeeToggle);
                 });
-                
-                // NOTE: The 'Remove' column rendering logic is removed here to match the updated header.
-                // To delete an item, you can manually delete the contents of a row, and the item can be filtered out later.
             });
         }
 
-        // --- EXPORTED FUNCTIONS (Critical fix for onclick handlers) ---
+        // --- EXPORTED FUNCTIONS (The NEW and FINAL fix using Firestore Transactions) ---
 
+        /**
+         * FINAL FIX: Uses runTransaction to ensure the Read-Modify-Write operation is atomic.
+         * This prevents race conditions when the button is clicked rapidly.
+         */
         window.addItineraryRow = async function() {
             if (!isAuthReady || !db) {
                 console.error("ERROR: Firestore not ready. Button should have been disabled.");
-                alert("Please wait for initialization to complete before adding items.");
                 return;
             }
             
-            // Note: Updated the initial attendees text to use 'Melissa' and 'Lindsay'
-            const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
-            
-            const newItems = [...(window.currentItineraryItems || []), newItem];
             const docRef = doc(db, ITINERARY_DOC_PATH);
 
             try {
-                 await setDoc(docRef, { items: newItems });
-                 console.log("New item added to itinerary.");
+                // Use a Transaction for atomic Read-Modify-Write operations
+                await runTransaction(db, async (transaction) => {
+                    // 1. Read the latest data within the transaction
+                    // Firestore guarantees this read is the latest and the transaction will retry if the document changes before the write.
+                    const docSnap = await transaction.get(docRef);
+                    const currentData = docSnap.data() || {};
+                    const currentItems = currentData.items || [];
+                    
+                    // 2. Create the new item
+                    const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
+                    
+                    // 3. Prepare the update (append the new item)
+                    const newItems = [...currentItems, newItem];
+                    
+                    // 4. Write back the update using the transaction object
+                    transaction.set(docRef, { items: newItems });
+                });
+                console.log("New item added to itinerary successfully via transaction.");
+
             } catch (e) {
-                console.error("Error adding document: ", e);
+                // This catch handles true network errors OR failed transaction attempts (e.g., maximum retries exceeded)
+                console.error("Error adding document in transaction: ", e);
             }
         }
         
-        // This function is no longer needed since the button is removed
-        // window.deleteItineraryItem = async function(id) {
-        //     if (!db) return;
-        //     const updatedItems = window.currentItineraryItems.filter(item => item.id !== id);
-        //     await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
-        // }
-
         // --- INTERNAL HANDLERS (Do not need to be on window) ---
 
         async function handleCellEdit(event) {
@@ -616,13 +640,26 @@
                 value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
             }
 
-            const updatedItems = window.currentItineraryItems.map(item => {
-                if (item.id === id) {
-                    return { ...item, [field]: value };
-                }
-                return item;
-            });
-            await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
+            const docRef = doc(db, ITINERARY_DOC_PATH);
+
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const docSnap = await transaction.get(docRef);
+                    const currentData = docSnap.data() || {};
+                    const currentItems = currentData.items || [];
+                    
+                    const updatedItems = currentItems.map(item => {
+                        if (item.id === id) {
+                            return { ...item, [field]: value };
+                        }
+                        return item;
+                    });
+
+                    transaction.set(docRef, { items: updatedItems });
+                });
+            } catch (e) {
+                console.error("Transaction failed during cell edit:", e);
+            }
         }
 
         async function handleAttendeeToggle(event) {
@@ -633,22 +670,35 @@
             if (!id || !field) return;
 
             const memberId = field.split('.')[1];
+            const docRef = doc(db, ITINERARY_DOC_PATH);
             
-            const currentItem = window.currentItineraryItems.find(item => item.id === id);
-            if (!currentItem) return;
-            
-            const currentValue = currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const docSnap = await transaction.get(docRef);
+                    const currentData = docSnap.data() || {};
+                    const currentItems = currentData.items || [];
+                    
+                    const currentItem = currentItems.find(item => item.id === id);
+                    if (!currentItem) return;
+                    
+                    // Determine the next state (Y/N)
+                    const currentValue = currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
 
-            const updatedItems = window.currentItineraryItems.map(item => {
-                if (item.id === id) {
-                    return { 
-                        ...item, 
-                        attendees: { ...item.attendees, [memberId]: currentValue } 
-                    };
-                }
-                return item;
-            });
-            await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
+                    const updatedItems = currentItems.map(item => {
+                        if (item.id === id) {
+                            return { 
+                                ...item, 
+                                attendees: { ...item.attendees, [memberId]: currentValue } 
+                            };
+                        }
+                        return item;
+                    });
+                    
+                    transaction.set(docRef, { items: updatedItems });
+                });
+            } catch (e) {
+                 console.error("Transaction failed during toggle:", e);
+            }
         }
 
         // --- CHAT RENDER LOGIC ---
