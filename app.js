@@ -1,4 +1,5 @@
-/ --- GLOBAL CONFIGURATION ---
+// --- GLOBAL CONFIGURATION ---
+console.log("App.js script loaded");
 
 // 1. INTERNAL PREVIEW CONFIG
 const internalConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
@@ -853,8 +854,14 @@ function handleMouseUp() {
 
 // --- BOOTSTRAP ---
 window.onload = function () {
-    initializeFirebase();
-    setupDoubleScroll();
+    console.log("Window loaded. Initializing app...");
+    try {
+        initializeFirebase();
+        setupDoubleScroll();
+    } catch (e) {
+        console.error("Critical Init Error:", e);
+        document.getElementById('app-load-status').textContent = "CRITICAL ERROR: " + e.message;
+    }
 }
 
 // --- DOUBLE SCROLLBAR LOGIC ---
@@ -890,6 +897,3 @@ function setupDoubleScroll() {
         }
     });
 }
-
-
-
