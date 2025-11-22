@@ -264,19 +264,7 @@
 
         // 2. EXTERNAL DEPLOYMENT CONFIG (For GitHub Pages)
         // We try to read from a separate file (window.GIT_FIREBASE_CONFIG).
-        let externalConfig = {
-            apiKey: "YOUR_API_KEY_HERE", 
-            authDomain: "YOUR_AUTH_DOMAIN_HERE", 
-            projectId: "YOUR_PROJECT_ID_HERE", 
-            storageBucket: "YOUR_STORAGE_BUCKET_HERE", 
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID_HERE", 
-            appId: "YOUR_APP_ID_HERE"
-        };
-
-        if (window.GIT_FIREBASE_CONFIG) {
-            console.log("Loaded external config from firebase-config.js");
-            externalConfig = window.GIT_FIREBASE_CONFIG;
-        }
+        const externalConfig = window.GIT_FIREBASE_CONFIG || {};
 
         // LOGIC: Prefer Internal Config (for immediate preview), fall back to External
         let firebaseConfig;
@@ -291,7 +279,8 @@
         } else {
             // We are on GitHub Pages (or local file)
             firebaseConfig = externalConfig;
-            appId = "orlando-trip-app-prod"; 
+            // The projectId is the best unique identifier for external deployment
+            appId = firebaseConfig.projectId || "orlando-trip-app-prod"; 
             isInternalEnv = false;
         }
 
@@ -332,60 +321,50 @@
         // --- AUTHENTICATION & INITIALIZATION ---
 
         function initializeFirebase() {
-            // Logic to verify if we have a valid configuration
-            // 1. Internal Environment
-            if (isInternalEnv) {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                onAuthStateChanged(auth, (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('current-user-id').textContent = userId;
-                        document.getElementById('auth-status').textContent = `Online (Internal)`;
-                        setupRealtimeListeners();
-                        initializeItinerary();
-                    } else {
-                         if (internalAuthToken) {
-                             signInWithCustomToken(auth, internalAuthToken).catch(err => console.error("Token Auth Fail", err));
-                         } else {
-                             signInAnonymously(auth).catch(err => console.error("Anon Auth Fail", err));
-                         }
-                    }
-                });
+            // 1. Check if we have a valid configuration (checking API key is sufficient)
+            if (!firebaseConfig.apiKey) {
+                console.error("Firebase config is missing or incomplete.");
+                document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Firebase keys missing in firebase-config.js!";
+                document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
                 return;
             }
 
-            // 2. External Environment (GitHub Pages)
-            if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY_HERE") {
+            // 2. Initialize App
+            try {
                 app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        document.getElementById('current-user-id').textContent = userId;
-                        document.getElementById('auth-status').textContent = `Online (External)`;
-                        setupRealtimeListeners();
-                        initializeItinerary();
-                    } else {
-                        // External: Always anonymous
-                        try {
-                            await signInAnonymously(auth);
-                        } catch (error) {
-                            console.error("Firebase Auth failed:", error);
-                            document.getElementById('auth-status').textContent = `Authentication failed. ${error.message}`;
-                        }
-                    }
-                });
-            } else {
-                // 3. Missing Config
-                console.error("Firebase config is missing or incomplete.");
-                document.getElementById('auth-status').textContent = "⚠️ OFFLINE: Config missing. Create firebase-config.js!";
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                document.getElementById('auth-status').textContent = `⚠️ OFFLINE: Initialization failed. ${error.message}`;
                 document.getElementById('auth-status').className = "text-sm text-red-600 font-bold";
+                return;
             }
+
+
+            // 3. Set up Auth Listener
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    document.getElementById('current-user-id').textContent = userId;
+                    document.getElementById('auth-status').textContent = isInternalEnv ? `Online (Internal)` : `Online (External)`;
+                    setupRealtimeListeners();
+                    initializeItinerary();
+                } else {
+                     if (isInternalEnv && internalAuthToken) {
+                         // Internal Preview Auth
+                         signInWithCustomToken(auth, internalAuthToken).catch(err => console.error("Token Auth Fail", err));
+                     } else {
+                         // External Auth (Always Anonymous for public deployment)
+                         try {
+                            await signInAnonymously(auth);
+                         } catch (error) {
+                             console.error("Firebase Auth failed:", error);
+                             document.getElementById('auth-status').textContent = `Authentication failed. ${error.message}`;
+                         }
+                     }
+                }
+            });
         }
 
         // --- FIRESTORE LISTENERS & LOGIC ---
@@ -402,9 +381,18 @@
             });
 
             // 2. Chat Listener
-            const q = query(collection(db, CHAT_COLLECTION_PATH), orderBy("timestamp", "asc"));
+            // Note: We are removing orderBy('timestamp', 'asc') because it often requires a Firestore index which can fail deployment.
+            // Sorting will be done locally after fetching.
+            const q = collection(db, CHAT_COLLECTION_PATH); 
             onSnapshot(q, (snapshot) => {
-                renderChat(snapshot.docs.map(d => d.data()));
+                const messages = snapshot.docs.map(d => d.data());
+                // Sort locally by timestamp (if available) before rendering
+                messages.sort((a, b) => {
+                    const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
+                    const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
+                    return timeA - timeB;
+                });
+                renderChat(messages);
             });
         }
         
@@ -418,12 +406,13 @@
             const docRef = doc(db, ITINERARY_DOC_PATH);
             const docSnap = await getDoc(docRef);
 
-            if (!docSnap.exists() || !docSnap.data().items || docSnap.data().items.length === 0) {
+            if (!docSnap.exists() || !docSnap.data() || !docSnap.data().items || docSnap.data().items.length === 0) {
                 const initialItinerary = [
                     createItineraryItem("Dec 22", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
                     createItineraryItem("Dec 23", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
                     createItineraryItem("Dec 23", "Epcot Holiday Festival (Evening)", 150, "Planned", "Marc, Mel, Dan, Jess, Ricky, John, Lin"),
                 ];
+                // Use setDoc to ensure the document exists with the initial data
                 await setDoc(docRef, { items: initialItinerary });
             }
         }
@@ -492,6 +481,8 @@
                     if (field === 'cost') {
                        // Format cost as currency for display, but keep original for editing
                        cellContent = `$${(parseFloat(cellContent) || 0).toFixed(2)}`;
+                       // Store the raw number in a data attribute to avoid currency parsing issues during edit
+                       cell.dataset.rawValue = item[field];
                        cell.classList.add('text-right', 'font-mono');
                     }
                     
@@ -544,6 +535,7 @@
             if (!db) return;
             const newItem = createItineraryItem('Dec 24', 'Christmas Eve Dinner Idea', 100, 'Idea', '');
             const newItems = [...(window.currentItineraryItems || []), newItem];
+            // Ensure data is saved with correct structure
             await setDoc(doc(db, ITINERARY_DOC_PATH), { items: newItems });
         }
         
@@ -564,11 +556,13 @@
             
             // Clean up cost field input
             if (field === 'cost') {
+                // Remove currency symbols, then parse as float
                 value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
             }
 
             const updatedItems = window.currentItineraryItems.map(item => {
                 if (item.id === id) {
+                    // Update the item object with the new value
                     return { ...item, [field]: value };
                 }
                 return item;
@@ -584,8 +578,13 @@
             if (!id || !field) return;
 
             const memberId = field.split('.')[1];
+            
+            // Find the current item
+            const currentItem = window.currentItineraryItems.find(item => item.id === id);
+            if (!currentItem) return;
+            
             // Toggle 'Y' to 'N' and 'N' (or empty) to 'Y'
-            const currentValue = target.textContent === '✓' ? 'N' : 'Y'; 
+            const currentValue = currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
 
             const updatedItems = window.currentItineraryItems.map(item => {
                 if (item.id === id) {
@@ -599,7 +598,7 @@
             await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
         }
 
-        // --- CHAT RENDER LOGIC (Unchanged) ---
+        // --- CHAT RENDER LOGIC ---
 
         function renderChat(messages) {
             const chatLog = document.getElementById('chat-messages');
