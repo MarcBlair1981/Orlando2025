@@ -31,14 +31,14 @@
             overflow-y: auto;
             scroll-behavior: smooth;
         }
+        /* Styling for the spreadsheet cells to maintain the grid feel */
         .spreadsheet-cell {
             padding: 8px;
             border: 1px solid #e5e7eb;
-            cursor: pointer;
             transition: background-color 0.1s;
         }
-        .spreadsheet-cell:hover {
-            background-color: #fef9e8;
+        .spreadsheet-cell[contenteditable="true"] {
+             cursor: text;
         }
         [contenteditable="true"]:focus {
             outline: 2px solid #fb923c; /* Orange focus ring */
@@ -157,15 +157,15 @@
 
         <!-- 2. ITINERARY & SPREADSHEET TAB -->
         <div id="tab-itinerary" class="tab-content hidden">
-            <h2 class="text-2xl font-bold text-red-700 mb-4">Collaborative Trip Itinerary & Budget</h2>
-            <p class="text-sm text-gray-600 mb-4">Edit any cell directly! All changes are saved instantly and shared with the group.</p>
+            <h2 class="text-2xl font-bold text-red-700 mb-4">Collaborative Trip Itinerary & Commitment Tracker</h2>
+            <p class="text-sm text-gray-600 mb-4">Click to edit Activity, Cost, or Status. Click a checkmark column to commit to an activity.</p>
             
             <div class="overflow-x-auto rounded-lg shadow-lg">
                 <table class="min-w-full bg-white border-collapse">
                     <thead>
-                        <tr class="bg-red-600 text-white text-sm uppercase tracking-wider">
-                            <th class="p-3 border-r border-red-700 sticky left-0 bg-red-600 w-32">Date / Time</th>
-                            <th class="p-3 border-r border-red-700 w-48">Activity</th>
+                        <tr class="bg-red-600 text-white text-sm uppercase tracking-wider sticky top-0 z-10">
+                            <th class="p-3 border-r border-red-700 w-32">Date</th>
+                            <th class="p-3 border-r border-red-700 w-48">Activity / Time</th>
                             <th class="p-3 border-r border-red-700 w-24">Cost</th>
                             <th class="p-3 border-r border-red-700 w-24">Status</th>
                             <!-- Family Members Columns -->
@@ -180,7 +180,8 @@
                             <th class="p-3 border-r border-red-700 text-center">Riley (1)</th>
                             <th class="p-3 border-r border-red-700 text-center">John (71)</th>
                             <th class="p-3 border-r border-red-700 text-center">Lin (70)</th>
-                            <th class="p-3 text-center">Ricky (41)</th>
+                            <th class="p-3 border-r border-red-700 text-center">Ricky (41)</th>
+                            <th class="p-3 text-center w-16">Remove</th>
                         </tr>
                     </thead>
                     <tbody id="itinerary-table-body" class="text-gray-700">
@@ -407,11 +408,10 @@
             });
         }
         
-        // ... (Rest of itinerary/chat/GPT logic remains similar to previous versions) ...
-
         // --- ITINERARY RENDER LOGIC ---
         
         window.currentItineraryItems = [];
+        let lastRenderedDate = ''; // Global to track the date for calendar grouping
 
         async function initializeItinerary() {
             if (!db) return;
@@ -420,8 +420,9 @@
 
             if (!docSnap.exists() || !docSnap.data().items || docSnap.data().items.length === 0) {
                 const initialItinerary = [
-                    createItineraryItem("Dec 22", "Arrivals / Check-in", 0, "Booked", "Marc, Melissa"),
-                    createItineraryItem("Dec 23", "Epcot Holiday Festival", 300, "Planned", "All"),
+                    createItineraryItem("Dec 22", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
+                    createItineraryItem("Dec 23", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
+                    createItineraryItem("Dec 23", "Epcot Holiday Festival (Evening)", 150, "Planned", "Marc, Mel, Dan, Jess, Ricky, John, Lin"),
                 ];
                 await setDoc(docRef, { items: initialItinerary });
             }
@@ -436,7 +437,12 @@
                 if (isAll) {
                     attendees[member.id] = 'Y';
                 } else {
-                    attendees[member.id] = attendeesText.includes(member.id) ? 'Y' : 'N';
+                    // Check if attendee is explicitly mentioned (case-insensitive, partial match on name)
+                    const mentioned = attendeesText.split(',').some(name => 
+                        name.trim().toLowerCase().includes(member.id.toLowerCase()) || 
+                        name.trim().toLowerCase().includes(member.name.split(' ')[0].toLowerCase())
+                    );
+                    attendees[member.id] = mentioned ? 'Y' : 'N';
                 }
             });
 
@@ -454,58 +460,116 @@
             const tableBody = document.getElementById('itinerary-table-body');
             tableBody.innerHTML = '';
             window.currentItineraryItems = items;
+            lastRenderedDate = ''; // Reset date tracker
+
+            // Sort items by date string
+            items.sort((a, b) => a.date.localeCompare(b.date));
+
 
             items.forEach((item) => {
+                // 1. Insert Date Header for calendar grouping
+                if (item.date !== lastRenderedDate) {
+                    const headerRow = tableBody.insertRow();
+                    headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; // Z-5 to keep it above regular rows
+                    const headerCell = headerRow.insertCell();
+                    headerCell.colSpan = 4 + FAMILY_MEMBERS.length + 1; // 4 core columns + N family members + 1 remove column
+                    headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
+                    headerCell.textContent = item.date;
+                    lastRenderedDate = item.date;
+                }
+
+                // 2. Insert Activity Row
                 const row = tableBody.insertRow();
                 row.className = 'border-t hover:bg-red-50 transition duration-100';
 
                 // Core fields
-                ['date', 'activity', 'cost', 'status'].forEach((field, colIndex) => {
+                ['date', 'activity', 'cost', 'status'].forEach((field) => {
                     const cell = row.insertCell();
-                    cell.className = `spreadsheet-cell ${colIndex === 0 ? 'sticky left-0 bg-white shadow-sm font-semibold' : ''} text-sm whitespace-nowrap`;
-                    cell.setAttribute('contenteditable', 'true');
+                    
+                    let cellContent = item[field] || '';
+                    let isEditable = true;
+                    
+                    if (field === 'cost') {
+                       // Format cost as currency for display, but keep original for editing
+                       cellContent = `$${(parseFloat(cellContent) || 0).toFixed(2)}`;
+                       cell.classList.add('text-right', 'font-mono');
+                    }
+                    
+                    if (field === 'date') {
+                        // Date column is visible but less prominent than the header, make it editable.
+                        cell.classList.add('font-semibold');
+                    }
+
+                    cell.className += ' spreadsheet-cell text-sm whitespace-nowrap';
+                    cell.setAttribute('contenteditable', isEditable ? 'true' : 'false');
                     cell.dataset.id = item.id;
                     cell.dataset.field = field;
-                    cell.textContent = item[field] || '';
+                    cell.textContent = cellContent;
                     cell.addEventListener('blur', handleCellEdit);
                 });
 
-                // Attendee fields
+                // 3. Attendee commitment fields
                 FAMILY_MEMBERS.forEach(member => {
                     const cell = row.insertCell();
-                    cell.className = 'spreadsheet-cell text-center text-sm font-mono cursor-pointer';
+                    cell.className = 'spreadsheet-cell text-center text-xl font-bold cursor-pointer transition duration-100';
                     cell.dataset.id = item.id;
                     cell.dataset.field = `attendees.${member.id}`;
-                    cell.textContent = item.attendees[member.id] || 'N';
                     
-                    if(item.attendees[member.id] === 'Y') {
-                        cell.classList.add('bg-green-100', 'text-green-700', 'font-bold');
+                    const isAttending = item.attendees[member.id] === 'Y';
+                    
+                    // Display: checkmark or empty (for cleaner calendar look)
+                    cell.textContent = isAttending ? '✓' : ''; 
+                    
+                    if(isAttending) {
+                        cell.classList.add('bg-green-100', 'text-green-700', 'hover:bg-green-200');
                     } else {
-                        cell.classList.add('text-gray-300');
+                        cell.classList.add('bg-white', 'text-gray-300', 'hover:bg-red-50');
                     }
                     
                     cell.addEventListener('click', handleAttendeeToggle);
                 });
+
+                // 4. Delete Button
+                const deleteCell = row.insertCell();
+                deleteCell.className = 'spreadsheet-cell text-center';
+                const deleteButton = document.createElement('button');
+                deleteButton.textContent = '×';
+                deleteButton.className = 'text-xl text-red-500 hover:text-red-700 font-extrabold transition duration-150';
+                deleteButton.onclick = () => deleteItineraryItem(item.id);
+                deleteCell.appendChild(deleteButton);
             });
         }
 
         window.addItineraryRow = async function() {
             if (!db) return;
-            const newItem = createItineraryItem('Date?', 'New Activity...', 0, 'Idea', '');
+            const newItem = createItineraryItem('Dec 24', 'Christmas Eve Dinner Idea', 100, 'Idea', '');
             const newItems = [...(window.currentItineraryItems || []), newItem];
             await setDoc(doc(db, ITINERARY_DOC_PATH), { items: newItems });
         }
         
+        window.deleteItineraryItem = async function(id) {
+            if (!db) return;
+            // Removed window.confirm as per constraints. 
+            // In a real application, a custom UI modal would replace this.
+            const updatedItems = window.currentItineraryItems.filter(item => item.id !== id);
+            await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
+        }
+
         async function handleCellEdit(event) {
             if (!db) return;
             const target = event.target;
             const id = target.dataset.id;
             const field = target.dataset.field;
-            const value = target.textContent.trim();
+            let value = target.textContent.trim();
             
+            // Clean up cost field input
+            if (field === 'cost') {
+                value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
+            }
+
             const updatedItems = window.currentItineraryItems.map(item => {
                 if (item.id === id) {
-                    return { ...item, [field]: field === 'cost' ? parseFloat(value) || 0 : value };
+                    return { ...item, [field]: value };
                 }
                 return item;
             });
@@ -520,7 +584,8 @@
             if (!id || !field) return;
 
             const memberId = field.split('.')[1];
-            const currentValue = target.textContent === 'Y' ? 'N' : 'Y';
+            // Toggle 'Y' to 'N' and 'N' (or empty) to 'Y'
+            const currentValue = target.textContent === '✓' ? 'N' : 'Y'; 
 
             const updatedItems = window.currentItineraryItems.map(item => {
                 if (item.id === id) {
@@ -534,7 +599,7 @@
             await setDoc(doc(db, ITINERARY_DOC_PATH), { items: updatedItems });
         }
 
-        // --- CHAT RENDER LOGIC ---
+        // --- CHAT RENDER LOGIC (Unchanged) ---
 
         function renderChat(messages) {
             const chatLog = document.getElementById('chat-messages');
@@ -584,7 +649,7 @@
             chatInput.value = '';
         }
 
-        // --- GPT LOGIC ---
+        // --- GPT LOGIC (Unchanged) ---
         const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key="; 
         
         window.sendGptQuery = async function() {
