@@ -7,9 +7,8 @@
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- OPTIONAL: Load external config if it exists (for GitHub) -->
-    <!-- TEMPORARILY COMMENTED OUT - UNCOMMENT ONLY IF YOU HAVE THIS FILE AND CONFIRM IT HAS NO ERRORS -->
-    <!-- <script src="firebase-config.js"></script> -->
+    <!-- IMPORTANT: Load external config for GitHub Pages deployment -->
+    <script src="firebase-config.js"></script>
 
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
@@ -256,8 +255,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        // IMPORT FIX: Added runTransaction for atomic updates
-        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // CRITICAL FIX: Removed runTransaction import, added getDocs for collection check.
+        import { getFirestore, doc, getDoc, addDoc, setDoc, updateDoc, onSnapshot, collection, query, serverTimestamp, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- GLOBAL CONFIGURATION ---
         
@@ -267,6 +266,7 @@
         const internalAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // 2. EXTERNAL DEPLOYMENT CONFIG (For GitHub Pages)
+        // This relies on firebase-config.js defining a global variable window.GIT_FIREBASE_CONFIG
         const externalConfig = window.GIT_FIREBASE_CONFIG || {};
 
         // LOGIC: Prefer Internal Config (for immediate preview), fall back to External
@@ -283,6 +283,7 @@
             if (firebaseConfig.apiKey) {
                 appId = firebaseConfig.projectId || "orlando-trip-app-prod";
             } else {
+                 // Fallback if no config is found, though initializeFirebase will fail without the apiKey
                  appId = "orlando-trip-app-prod";
             }
             isInternalEnv = false;
@@ -297,7 +298,6 @@
         // The list of family members for the spreadsheet columns
         const FAMILY_MEMBERS = [
             { id: "Marc", name: "Marc Blair", age: 43 },
-            // Name updated from 'Mel' to 'Melissa' in comments/logic for clarity
             { id: "Melissa", name: "Melissa Blair", age: 39 }, 
             { id: "Billie", name: "Billie Blair", age: 10 },
             { id: "Mimi", name: "Mimi Blair", age: 6 },
@@ -307,13 +307,12 @@
             { id: "Emma", name: "Emma Rosenberg", age: 7 }, 
             { id: "Riley", name: "Riley Rosenberg", age: 1 },
             { id: "John", name: "John Blair", age: 71 },
-            // Name updated from 'Lin' to 'Lindsay' in comments/logic for clarity
             { id: "Lindsay", name: "Lindsay Blair", age: 70 }, 
             { id: "Ricky", name: "Ricky Blair", age: 41 },
         ];
 
-        // This path is constant for the public shared itinerary document
-        const ITINERARY_DOC_PATH = `artifacts/${appId}/public/data/orlando_planning/itinerary`;
+        // CRITICAL FIX: Changed from a single document path to a collection path for individual items
+        const ITINERARY_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_itinerary_items`;
         const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
 
         // --- UI UTILITIES (Attach to window for global access) ---
@@ -397,15 +396,15 @@
             document.getElementById('app-load-status').textContent = "Setting up real-time Firestore listeners...";
 
             // 1. Itinerary Listener: Listens for changes to the single document
-            onSnapshot(doc(db, ITINERARY_DOC_PATH), (docSnap) => {
-                const data = docSnap.data();
-                if (data && data.items) {
-                    renderItinerary(data.items);
-                    document.getElementById('app-load-status').textContent = "Itinerary loaded and updated.";
-                } else {
-                    renderItinerary([]);
-                    document.getElementById('app-load-status').textContent = "Itinerary data initialized/empty.";
-                }
+            const itineraryCollection = collection(db, ITINERARY_COLLECTION_PATH);
+            // CRITICAL FIX: Listen to the collection instead of a single document
+            onSnapshot(itineraryCollection, (snapshot) => {
+                const items = snapshot.docs.map(d => ({ 
+                    ...d.data(), 
+                    id: d.id // Use Firestore doc ID as the item ID
+                })); 
+                renderItinerary(items);
+                document.getElementById('app-load-status').textContent = "Itinerary loaded and updated from collection.";
             }, (error) => {
                  console.error("Itinerary snapshot error:", error);
                  document.getElementById('app-load-status').textContent = `Itinerary error: ${error.message}`;
@@ -438,7 +437,6 @@
          * Robustly handles null/undefined date strings.
          */
         function dateToNumber(dateString) {
-            // FIX: Add check for null/undefined/empty dateString
             if (!dateString || typeof dateString !== 'string') {
                 return 9999.0; // Place items without a valid date at the very end
             }
@@ -449,12 +447,6 @@
                 "Dec 28": 1228, "Dec 29": 1229
             };
             
-            // Extract the month and day part (e.g., "Dec 25") by removing time info in parentheses
-            const keyParts = dateString.split(' ');
-            if (keyParts.length < 2) return 9999.1; // Handle malformed dates gracefully
-            
-            // Re-join the first two parts and remove anything in parentheses (like '(Morning)')
-            // FIX: Use a regex replace for robustness.
             const datePartMatch = dateString.match(/^(Dec \d{1,2})/); 
             const key = datePartMatch ? datePartMatch[1].trim() : '';
 
@@ -470,27 +462,40 @@
             } else if (dateString.toLowerCase().includes('(evening)')) {
                  sortValue += 0.9;
             }
-            // For general 'Dec 25' without time, the default integer is used.
             
             return sortValue; 
         }
         
+        /**
+         * Checks if the itinerary collection is empty and populates it if necessary.
+         */
         async function initializeItinerary() {
             if (!db) return;
-            const docRef = doc(db, ITINERARY_DOC_PATH);
-            const docSnap = await getDoc(docRef);
+            const collectionRef = collection(db, ITINERARY_COLLECTION_PATH);
+            const snapshot = await getDocs(collectionRef);
 
-            if (!docSnap.exists() || !docSnap.data() || !docSnap.data().items || docSnap.data().items.length === 0) {
+            if (snapshot.empty) {
                 // Initial data with full names "Melissa" and "Lindsay"
                 const initialItinerary = [
                     createItineraryItem("Dec 22 (Arrival)", "Arrivals / Check-in (after 3PM)", 0, "Booked", "Marc, Melissa, John, Lindsay, Ricky"),
                     createItineraryItem("Dec 23 (Morning)", "Magic Kingdom Day (Lunch at Be Our Guest)", 300, "Planned", "All"),
                     createItineraryItem("Dec 23 (Evening)", "Epcot Holiday Festival", 150, "Planned", "Marc, Melissa, Daniel, Jessica, Ricky, John, Lindsay"),
                 ];
-                await setDoc(docRef, { items: initialItinerary });
+                // Add each item as a separate document in the collection
+                for (const item of initialItinerary) {
+                    // Note: We don't need the `id` property here since addDoc generates one
+                    await addDoc(collectionRef, item);
+                }
+                document.getElementById('app-load-status').textContent = "Initial itinerary populated.";
+            } else {
+                 document.getElementById('app-load-status').textContent = "Itinerary collection already exists.";
             }
         }
 
+        /**
+         * Creates a base itinerary item object without a client-side ID.
+         * The ID will be assigned by Firestore's addDoc.
+         */
         function createItineraryItem(date, activity, cost, status, attendeesText) {
             const attendees = {};
             // Default everyone to N unless specified 'All'
@@ -500,7 +505,7 @@
                 if (isAll) {
                     attendees[member.id] = 'Y';
                 } else {
-                    // Check for first name match (e.g., 'Melissa' or 'Lindsay')
+                    // Check for first name match 
                     const firstName = member.name.split(' ')[0].toLowerCase();
                     const mentioned = attendeesText.split(',').some(name => 
                         name.trim().toLowerCase().includes(member.id.toLowerCase()) || 
@@ -511,7 +516,7 @@
             });
 
             return {
-                id: crypto.randomUUID(),
+                // Removed client-side ID generation
                 date: date,
                 activity: activity,
                 cost: cost,
@@ -524,11 +529,10 @@
             const tableBody = document.getElementById('itinerary-table-body');
             tableBody.innerHTML = '';
             window.currentItineraryItems = items;
-            let lastRenderedDate = ''; // Local tracker for date grouping
+            let lastRenderedDate = ''; 
 
             // Sort items by the custom date-time number for correct chronological ordering
             items.sort((a, b) => {
-                // Ensure dateToNumber doesn't fail if date is missing
                 const dateA = a.date || ''; 
                 const dateB = b.date || ''; 
                 return dateToNumber(dateA) - dateToNumber(dateB);
@@ -536,15 +540,12 @@
 
 
             items.forEach((item) => {
-                // Skip if item is malformed or missing key fields
                 if (!item || !item.date || !item.id) {
                      console.warn("Skipping malformed itinerary item:", item);
                      return; 
                 }
 
                 // 1. Insert Date Header for calendar grouping
-                // Only look at the month and day (e.g., "Dec 23") for the header grouping
-                // FIX: Use robust date parsing for header grouping too
                 const itemDateMatch = item.date.match(/^(Dec \d{1,2})/);
                 const itemDateOnly = itemDateMatch ? itemDateMatch[1].trim() : 'Unknown Date';
                 
@@ -556,7 +557,6 @@
                     const headerRow = tableBody.insertRow();
                     headerRow.className = 'bg-gray-200 border-b-4 border-red-500 sticky top-0 z-5'; 
                     const headerCell = headerRow.insertCell();
-                    // Colspan is 4 (Date, Activity, Cost, Status) + FAMILY_MEMBERS.length
                     headerCell.colSpan = 4 + FAMILY_MEMBERS.length; 
                     headerCell.className = 'p-3 text-left font-extrabold text-xl text-red-800 tracking-wide shadow-inner';
                     headerCell.textContent = itemDateOnly; 
@@ -571,12 +571,14 @@
                 ['date', 'activity', 'cost', 'status'].forEach((field) => {
                     const cell = row.insertCell();
                     
-                    let cellContent = item[field] || ''; // Use empty string fallback for display
+                    let cellContent = item[field] || ''; 
                     let isEditable = true;
                     
                     if (field === 'cost') {
-                       cellContent = `$${(parseFloat(item[field]) || 0).toFixed(2)}`;
-                       cell.dataset.rawValue = item[field];
+                       // Ensure value is treated as a number
+                       const costValue = (parseFloat(item[field]) || 0);
+                       cellContent = `$${costValue.toFixed(2)}`;
+                       cell.dataset.rawValue = costValue;
                        cell.classList.add('text-right', 'font-mono');
                     }
                     
@@ -614,127 +616,89 @@
             });
         }
 
-        // --- EXPORTED FUNCTIONS (The NEW and FINAL fix using Firestore Transactions) ---
+        // --- EXPORTED FUNCTIONS (Now use simple addDoc) ---
 
         /**
-         * FINAL FIX: Uses runTransaction to ensure the Read-Modify-Write operation is atomic.
-         * This prevents race conditions when the button is clicked rapidly.
+         * FIX: Uses addDoc directly on the collection, eliminating the need for complex transactions
+         * and preventing version conflicts.
          */
         window.addItineraryRow = async function() {
             if (!isAuthReady || !db) {
-                console.error("ERROR: Firestore not ready. Button should have been disabled.");
+                console.error("ERROR: Firestore not ready.");
                 return;
             }
             
-            const docRef = doc(db, ITINERARY_DOC_PATH);
+            const collectionRef = collection(db, ITINERARY_COLLECTION_PATH);
 
             try {
-                // Use a Transaction for atomic Read-Modify-Write operations
-                await runTransaction(db, async (transaction) => {
-                    // 1. Read the latest data within the transaction
-                    // Firestore guarantees this read is the latest and the transaction will retry if the document changes before the write.
-                    const docSnap = await transaction.get(docRef);
-                    const currentData = docSnap.data() || {};
-                    const currentItems = currentData.items || [];
-                    
-                    // 2. Create the new item
-                    const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
-                    
-                    // 3. Prepare the update (append the new item)
-                    const newItems = [...currentItems, newItem];
-                    
-                    // 4. Write back the update using the transaction object
-                    transaction.set(docRef, { items: newItems });
-                });
-                console.log("New item added to itinerary successfully via transaction.");
+                const newItem = createItineraryItem('Dec 24 (Evening)', 'New Idea / Reservation', 100, 'Idea', 'Marc, Melissa'); 
+                await addDoc(collectionRef, newItem);
+                console.log("New item added to itinerary collection successfully.");
 
             } catch (e) {
-                // This catch handles true network errors OR failed transaction attempts (e.g., maximum retries exceeded)
-                console.error("Error adding document in transaction: ", e);
+                console.error("Error adding document to collection: ", e);
             }
         }
         
-        // --- INTERNAL HANDLERS (Do not need to be on window) ---
+        // --- INTERNAL HANDLERS (Now use simple updateDoc) ---
 
+        /**
+         * FIX: Uses updateDoc directly on the specific item document, eliminating transactions.
+         */
         async function handleCellEdit(event) {
             if (!db) return;
             const target = event.target;
-            const id = target.dataset.id;
+            const id = target.dataset.id; // This is the Firestore Document ID
             const field = target.dataset.field;
             let value = target.textContent.trim();
             
-            // Re-render immediately to show user input, before the database update.
-            // This is purely for perceived performance. The onSnapshot listener will fix 
-            // the state if the database fails or overwrites it.
+            // Handle cost field parsing
             if (field === 'cost') {
-                target.textContent = `$${(parseFloat(value.replace(/[^0-9.]/g, '')) || 0).toFixed(2)}`;
                 value = parseFloat(value.replace(/[^0-9.]/g, '')) || 0;
+                // Update display to look clean
+                target.textContent = `$${value.toFixed(2)}`;
             }
 
-
-            const docRef = doc(db, ITINERARY_DOC_PATH);
-
             try {
-                await runTransaction(db, async (transaction) => {
-                    const docSnap = await transaction.get(docRef);
-                    const currentData = docSnap.data() || {};
-                    const currentItems = currentData.items || [];
-                    
-                    const updatedItems = currentItems.map(item => {
-                        if (item.id === id) {
-                            return { ...item, [field]: value };
-                        }
-                        return item;
-                    });
-
-                    transaction.set(docRef, { items: updatedItems });
-                });
+                const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
+                // Update only the specific field of the specific document
+                await updateDoc(docRef, { [field]: value });
             } catch (e) {
-                console.error("Transaction failed during cell edit:", e);
-                // On failure, rely on the onSnapshot listener to restore the correct data
+                console.error("Error updating document field:", e);
+                // Rely on the onSnapshot listener to revert the cell if the update fails
             }
         }
 
+        /**
+         * FIX: Uses updateDoc directly on the specific item document, eliminating transactions.
+         */
         async function handleAttendeeToggle(event) {
             if (!db) return;
             const target = event.target;
             const id = target.dataset.id;
-            const field = target.dataset.field; 
+            const field = target.dataset.field; // attendees.MemberId
             if (!id || !field) return;
 
             const memberId = field.split('.')[1];
-            const docRef = doc(db, ITINERARY_DOC_PATH);
             
-            try {
-                await runTransaction(db, async (transaction) => {
-                    const docSnap = await transaction.get(docRef);
-                    const currentData = docSnap.data() || {};
-                    const currentItems = currentData.items || [];
-                    
-                    const currentItem = currentItems.find(item => item.id === id);
-                    if (!currentItem) return;
-                    
-                    // Determine the next state (Y/N)
-                    const currentValue = currentItem.attendees && currentItem.attendees[memberId] === 'Y' ? 'N' : 'Y'; 
+            // Find the current value locally from window.currentItineraryItems
+            const currentItem = window.currentItineraryItems.find(item => item.id === id);
+            if (!currentItem) return;
 
-                    const updatedItems = currentItems.map(item => {
-                        if (item.id === id) {
-                            return { 
-                                ...item, 
-                                attendees: { ...item.attendees, [memberId]: currentValue } 
-                            };
-                        }
-                        return item;
-                    });
-                    
-                    transaction.set(docRef, { items: updatedItems });
-                });
+            // Determine the next state (Y/N)
+            const isAttending = currentItem.attendees && currentItem.attendees[memberId] === 'Y';
+            const nextValue = isAttending ? 'N' : 'Y';
+
+            try {
+                const docRef = doc(db, ITINERARY_COLLECTION_PATH, id);
+                // Use dot notation to update a nested field directly
+                await updateDoc(docRef, { [`attendees.${memberId}`]: nextValue });
             } catch (e) {
-                 console.error("Transaction failed during toggle:", e);
+                 console.error("Error updating attendee status:", e);
             }
         }
 
-        // --- CHAT RENDER LOGIC ---
+        // --- CHAT RENDER LOGIC (Unchanged) ---
 
         function renderChat(messages) {
             const chatLog = document.getElementById('chat-messages');
