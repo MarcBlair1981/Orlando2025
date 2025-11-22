@@ -18,6 +18,26 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <!-- GLOBAL ERROR HANDLER -->
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            const statusDiv = document.getElementById('app-load-status');
+            if (statusDiv) {
+                statusDiv.innerHTML = `<span class="text-red-600 font-bold">ERROR: ${msg} <br> at ${url}:${line}:${col}</span>`;
+                statusDiv.classList.remove('text-blue-600');
+                statusDiv.classList.add('text-red-600', 'bg-red-100', 'p-2', 'rounded');
+            }
+            return false;
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (!window.firebase) {
+                const statusDiv = document.getElementById('app-load-status');
+                if (statusDiv) statusDiv.textContent += " (Warning: Firebase SDK not loaded)";
+            }
+        });
+    </script>
 </head>
 
 <body>
