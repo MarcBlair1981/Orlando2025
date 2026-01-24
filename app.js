@@ -34,23 +34,28 @@ let userId = 'loading';
 let isAuthReady = false;
 
 const FAMILY_MEMBERS = [
-    { id: "Marc", name: "Marc Blair", age: 43, role: 'adult', pin: '2512' },
-    { id: "Melissa", name: "Melissa Blair", age: 39, role: 'adult', pin: '2512' },
+    { id: "Marc", name: "Marc Blair", age: 43, role: 'adult' },
+    { id: "Melissa", name: "Melissa Blair", age: 39, role: 'adult' },
     { id: "Billie", name: "Billie Blair", age: 10, role: 'child' },
     { id: "Mimi", name: "Mimi Blair", age: 6, role: 'child' },
-    { id: "Daniel", name: "Daniel Rosenberg", age: 39, role: 'adult', pin: '2512' },
-    { id: "Jessica", name: "Jessica Blair", age: 37, role: 'adult', pin: '2512' },
+    { id: "Daniel", name: "Daniel Rosenberg", age: 39, role: 'adult' },
+    { id: "Jessica", name: "Jessica Blair", age: 37, role: 'adult' },
     { id: "Joey", name: "Joey Rosenberg", age: 5, role: 'child' },
     { id: "Emma", name: "Emma Rosenberg", age: 7, role: 'child' },
     { id: "Riley", name: "Riley Rosenberg", age: 1, role: 'child' },
-    { id: "John", name: "John Blair", age: 71, role: 'adult', pin: '2512' },
-    { id: "Lindsay", name: "Lindsay Blair", age: 70, role: 'adult', pin: '2512' },
-    { id: "Ricky", name: "Ricky Blair", age: 41, role: 'adult', pin: '2512' },
+    { id: "John", name: "John Blair", age: 71, role: 'adult' },
+    { id: "Lindsay", name: "Lindsay Blair", age: 70, role: 'adult' },
+    { id: "Ricky", name: "Ricky Blair", age: 41, role: 'adult' },
 ];
 
+// --- SECURITY CONFIG ---
+const SECURITY_QUESTION = "Collective Term for Joey & Emma?";
+const SECURITY_ANSWER = "vermin"; // Case-insensitive
+
 const ITINERARY_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_itinerary_items`;
-const CHAT_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_chat`;
+
 const PACKING_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_packing_list`;
+const PHOTO_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_photos`;
 
 // --- UI UTILITIES ---
 // Explicitly attach to window to ensure global availability
@@ -141,8 +146,8 @@ let currentUserMemberId = null;
 let currentUserIsAdult = false;
 
 function checkLoginStatus() {
-    const storedUser = localStorage.getItem('orlandoUser');
-    const storedIsAdult = localStorage.getItem('orlandoUserIsAdult') === 'true';
+    const storedUser = localStorage.getItem('orlandoUser2026');
+    const storedIsAdult = localStorage.getItem('orlandoUserIsAdult2026') === 'true';
 
     if (storedUser) {
         // Restore session without prompting if it exists
@@ -180,23 +185,21 @@ window.loginAs = function (memberId, save = true) {
     const member = FAMILY_MEMBERS.find(m => m.id === memberId);
     if (!member) return;
 
-    let isAdult = false;
-
-    if (member.role === 'adult') {
-        const inputPin = prompt(`Enter PIN for ${member.name.split(' ')[0]}:`);
-        if (inputPin !== member.pin) {
-            alert("Incorrect PIN. Please try again.");
-            return;
-        }
-        isAdult = true;
+    // Global Security Check for EVERYONE
+    const inputAnswer = prompt(SECURITY_QUESTION);
+    if (!inputAnswer || inputAnswer.trim().toLowerCase() !== SECURITY_ANSWER.toLowerCase()) {
+        alert("Incorrect answer. Access denied.");
+        return;
     }
+
+    const isAdult = (member.role === 'adult');
 
     currentUserMemberId = memberId;
     currentUserIsAdult = isAdult;
 
     if (save) {
-        localStorage.setItem('orlandoUser', memberId);
-        localStorage.setItem('orlandoUserIsAdult', isAdult);
+        localStorage.setItem('orlandoUser2026', memberId);
+        localStorage.setItem('orlandoUserIsAdult2026', isAdult);
         document.getElementById('login-modal').classList.add('hidden');
     }
 
@@ -220,16 +223,11 @@ function updateUIForUser(memberId) {
 
 // --- COUNTDOWN LOGIC ---
 function startCountdown() {
-    const targetDate = new Date("2025-12-20T12:00:00Z").getTime();
+    const tripDate = new Date("2025-12-20T12:00:00Z").getTime();
 
     function update() {
         const now = new Date().getTime();
-        const distance = targetDate - now;
-
-        if (distance < 0) {
-            document.getElementById("countdown-timer").innerHTML = "<div class='col-span-4 text-2xl font-bold text-white'>WE ARE FLYING! ✈️</div>";
-            return;
-        }
+        const distance = now - tripDate;
 
         const days = Math.floor(distance / (1000 * 60 * 60 * 24));
         const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
@@ -263,19 +261,16 @@ function setupRealtimeListeners() {
         console.error("Itinerary snapshot error:", error);
     });
 
-    db.collection(CHAT_COLLECTION_PATH).onSnapshot((snapshot) => {
-        const messages = snapshot.docs.map(d => d.data());
-        messages.sort((a, b) => {
-            const timeA = a.timestamp ? a.timestamp.toMillis() : 0;
-            const timeB = b.timestamp ? b.timestamp.toMillis() : 0;
-            return timeA - timeB;
-        });
-        renderChat(messages);
-    });
+
 
     db.collection(PACKING_COLLECTION_PATH).onSnapshot((snapshot) => {
         const packingItems = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
         renderPackingList(packingItems);
+    });
+
+    db.collection(PHOTO_COLLECTION_PATH).orderBy('timestamp', 'desc').onSnapshot((snapshot) => {
+        const photos = snapshot.docs.map(d => d.data());
+        renderGallery(photos);
     });
 }
 
@@ -882,68 +877,98 @@ window.addItineraryRow = async function () {
     }
 }
 
-// --- CHAT LOGIC ---
 
-function renderChat(messages) {
-    const chatLog = document.getElementById('chat-messages');
-    if (!chatLog) return;
-    chatLog.innerHTML = '';
-    if (messages.length === 0) chatLog.innerHTML = '<p class="text-center text-gray-500 py-4">No suggestions yet!</p>';
 
-    messages.forEach(msg => {
-        const messageElement = document.createElement('div');
-        messageElement.className = 'mb-3 p-3 rounded-lg shadow-sm';
-        const isMine = msg.userId === userId;
+// --- GPT LOGIC ---
 
-        if (isMine) {
-            messageElement.classList.add('bg-red-100', 'ml-auto', 'max-w-[90%]');
-        } else {
-            messageElement.classList.add('bg-white', 'mr-auto', 'max-w-[90%]');
-        }
+// --- GALLERY LOGIC ---
 
-        const date = msg.timestamp ? new Date(msg.timestamp.toMillis()) : new Date();
-        const timeString = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const userName = msg.userName || 'Anonymous Planner';
-
-        messageElement.innerHTML = `
-            <p class="text-xs ${isMine ? 'text-red-700' : 'text-gray-500'} font-semibold mb-1">
-                ${userName} <span class="float-right font-normal text-gray-400">${timeString}</span>
-            </p>
-            <p class="text-gray-800 whitespace-pre-wrap">${msg.text}</p>
-        `;
-        chatLog.appendChild(messageElement);
-    });
-    chatLog.scrollTop = chatLog.scrollHeight;
+window.unlockUploads = function () {
+    const answer = prompt(SECURITY_QUESTION);
+    if (answer && answer.trim().toLowerCase() === SECURITY_ANSWER.toLowerCase()) {
+        document.getElementById('upload-locked').classList.add('hidden');
+        document.getElementById('upload-unlocked').classList.remove('hidden');
+    } else {
+        alert("Incorrect answer. Uploads remain locked.");
+    }
 }
 
-window.sendMessage = async function () {
-    if (!db) return;
-    const chatInput = document.getElementById('chat-input');
-    const val = chatInput.value.trim();
-    if (!val) return;
+window.uploadPhotos = async function (files) {
+    if (!files.length) return;
+    const status = document.getElementById('upload-status');
 
-    const user = auth.currentUser;
-    // Use the selected family member name if available, otherwise fallback
-    let userName = 'Guest Planner';
-    if (currentUserMemberId) {
-        const member = FAMILY_MEMBERS.find(m => m.id === currentUserMemberId);
-        if (member) userName = member.name.split(' ')[0];
-    } else if (user) {
-        userName = user.uid.substring(0, 8);
+    const storageRef = firebase.storage().ref();
+    const user = FAMILY_MEMBERS.find(m => m.id === currentUserMemberId) || { name: "Guest" };
+
+    let completed = 0;
+    const total = files.length;
+
+    for (let file of files) {
+        status.innerText = `Uploading ${file.name} (0%)...`;
+        const fileName = `photos/${Date.now()}_${file.name}`;
+        const fileRef = storageRef.child(fileName);
+
+        const uploadTask = fileRef.put(file);
+
+        // Monitoring
+        uploadTask.on('state_changed',
+            (snapshot) => {
+                const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                status.innerText = `Uploading ${file.name} (${Math.round(progress)}%)...`;
+            },
+            (error) => {
+                console.error("Upload Error:", error);
+                status.innerText = `Error: ${error.message}. Check Console (F12).`;
+            }
+        );
+
+        try {
+            await uploadTask;
+            const url = await fileRef.getDownloadURL();
+
+            await db.collection(PHOTO_COLLECTION_PATH).add({
+                url: url,
+                uploader: user.name.split(' ')[0],
+                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                fileName: file.name
+            });
+            completed++;
+        } catch (error) {
+            console.error("Final Upload Fail", error);
+        }
     }
 
-    await db.collection(CHAT_COLLECTION_PATH).add({
-        userId: userId,
-        userName: userName,
-        text: val,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-    });
-    chatInput.value = '';
+    if (completed === total) {
+        status.innerText = "All uploads complete! Add more?";
+        document.getElementById('photo-upload').value = "";
+    }
 }
 
-// --- GPT LOGIC ---
+function renderGallery(photos) {
+    const gallery = document.getElementById('photo-gallery');
+    if (!gallery) return;
+    gallery.innerHTML = '';
 
-// --- GPT LOGIC ---
+    if (photos.length === 0) {
+        gallery.innerHTML = '<div class="col-span-full text-center py-10 text-gray-500">No memories yet. Be the first to add one!</div>';
+        return;
+    }
+
+    photos.forEach(photo => {
+        const div = document.createElement('div');
+        div.className = "relative group overflow-hidden rounded-xl shadow-lg aspect-square bg-gray-200";
+
+        div.innerHTML = `
+            <img src="${photo.url}" class="object-cover w-full h-full transform transition duration-500 group-hover:scale-110" loading="lazy" alt="Memory">
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition duration-300">
+                <p class="text-white text-xs font-bold">📸 ${photo.uploader}</p>
+            </div>
+        `;
+        // Lightbox on click (simple)
+        div.onclick = () => window.open(photo.url, '_blank');
+        gallery.appendChild(div);
+    });
+}
 
 window.saveApiKey = function () {
     const keyInput = document.getElementById('gemini-api-key');
@@ -957,104 +982,13 @@ window.saveApiKey = function () {
     }
 }
 
-// Load key on init if exists
-window.addEventListener('DOMContentLoaded', () => {
-    const savedKey = localStorage.getItem('gemini_api_key');
-    const configKey = window.GIT_FIREBASE_CONFIG?.geminiApiKey;
-    const input = document.getElementById('gemini-api-key');
-
-    if (input) {
-        if (savedKey) {
-            input.placeholder = "Key saved (hidden)";
-        } else if (configKey) {
-            input.value = configKey;
-        }
-    }
+// (End of GPT logic)
+document.addEventListener('DOMContentLoaded', () => {
+    initializeFirebase();
+    checkLoginStatus();
+    startCountdown();
+    setupDoubleScroll();
 });
-
-window.sendGptQuery = async function () {
-    const inputElement = document.getElementById('gpt-input');
-    const chatLog = document.getElementById('gpt-chat-log');
-    const userQuery = inputElement.value.trim();
-    if (!userQuery) return;
-
-    // 1. Check for API Key
-    let apiKey = localStorage.getItem('gemini_api_key');
-    if (!apiKey && window.GIT_FIREBASE_CONFIG && window.GIT_FIREBASE_CONFIG.geminiApiKey) {
-        apiKey = window.GIT_FIREBASE_CONFIG.geminiApiKey;
-    }
-
-    if (!apiKey) {
-        alert("Please enter your Google Gemini API Key in the settings above to use this feature.");
-        return;
-    }
-
-    // 2. Add User Message to Chat
-    const msgDiv = document.createElement('div');
-    msgDiv.className = "p-3 rounded-lg shadow-sm mb-3 bg-red-100 ml-auto max-w-[90%]";
-    msgDiv.innerHTML = `<p class="text-xs text-red-700 font-semibold">You</p><p>${userQuery}</p>`;
-    chatLog.appendChild(msgDiv);
-    inputElement.value = '';
-    chatLog.scrollTop = chatLog.scrollHeight;
-
-    // 3. Show Loading State
-    const loadingDiv = document.createElement('div');
-    loadingDiv.innerHTML = "Thinking... 🧠";
-    loadingDiv.className = "text-sm text-gray-500 p-2";
-    chatLog.appendChild(loadingDiv);
-    chatLog.scrollTop = chatLog.scrollHeight;
-
-    try {
-        // 4. Call Gemini API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `You are Mickey's Planning Pal, an expert Disney World travel planner for a family trip to Orlando in December 2025. 
-                        The family consists of 12 people (6 adults, 6 kids ages 1-10). 
-                        They are staying at the Waldorf Astoria Orlando.
-                        Current Date context: ${new Date().toDateString()}.
-                        
-                        User Question: ${userQuery}
-                        
-                        Keep your answer helpful, concise, and magical!`
-                    }]
-                }]
-            })
-        });
-
-        const data = await response.json();
-        loadingDiv.remove();
-
-        let aiText = "Sorry, I had trouble connecting to the magic.";
-        if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts) {
-            aiText = data.candidates[0].content.parts[0].text;
-        } else if (data.error) {
-            aiText = `Error: ${data.error.message}`;
-        }
-
-        // 5. Display AI Response
-        const responseDiv = document.createElement('div');
-        responseDiv.className = "p-3 rounded-lg shadow-sm mb-3 bg-white mr-auto max-w-[90%] border border-gray-200";
-        // Convert simple markdown to HTML (basic)
-        const formattedText = aiText.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
-
-        responseDiv.innerHTML = `<p class="text-xs text-blue-600 font-semibold">Mickey's Pal</p><p>${formattedText}</p>`;
-        chatLog.appendChild(responseDiv);
-        chatLog.scrollTop = chatLog.scrollHeight;
-
-    } catch (error) {
-        loadingDiv.remove();
-        const errorDiv = document.createElement('div');
-        errorDiv.className = "p-3 rounded-lg shadow-sm mb-3 bg-red-50 border border-red-200 text-red-600 text-sm";
-        errorDiv.textContent = "Network Error: " + error.message;
-        chatLog.appendChild(errorDiv);
-    }
-}
 
 // --- COLUMN RESIZING ---
 let currentResizer = null;
@@ -1100,20 +1034,6 @@ function handleMouseUp() {
     window.removeEventListener('mouseup', handleMouseUp);
 }
 
-// --- BOOTSTRAP ---
-window.onload = function () {
-    console.log("Window loaded. Initializing app...");
-    try {
-        initializeFirebase();
-        setupDoubleScroll();
-        startCountdown();
-    } catch (e) {
-        console.error("Critical Init Error:", e);
-        document.getElementById('app-load-status').textContent = "CRITICAL ERROR: " + e.message;
-    }
-}
-
-// --- DOUBLE SCROLLBAR LOGIC ---
 function setupDoubleScroll() {
     const topContainer = document.getElementById('top-scroll-container');
     const topContent = document.getElementById('top-scroll-content');
@@ -1122,18 +1042,14 @@ function setupDoubleScroll() {
 
     if (!topContainer || !topContent || !tableContainer || !table) return;
 
-    // Sync width
     const syncWidth = () => {
         topContent.style.width = table.offsetWidth + 'px';
     };
 
-    // Initial sync and on resize
     syncWidth();
-    // Use ResizeObserver for more robust width syncing
     const resizeObserver = new ResizeObserver(syncWidth);
     resizeObserver.observe(table);
 
-    // Sync scroll positions
     topContainer.addEventListener('scroll', () => {
         if (tableContainer.scrollLeft !== topContainer.scrollLeft) {
             tableContainer.scrollLeft = topContainer.scrollLeft;
