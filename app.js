@@ -904,11 +904,16 @@ window.uploadPhotos = async function (files) {
     const total = files.length;
 
     for (let file of files) {
-        status.innerText = `Uploading ${file.name} (0%)...`;
+        status.innerText = `Starting ${file.name}...`;
         const fileName = `photos/${Date.now()}_${file.name}`;
         const fileRef = storageRef.child(fileName);
 
-        const uploadTask = fileRef.put(file);
+        // Fix for HEIC files sometimes missing MIME type
+        const metadata = {
+            contentType: file.type || 'application/octet-stream'
+        };
+
+        const uploadTask = fileRef.put(file, metadata);
 
         // Monitoring
         uploadTask.on('state_changed',
@@ -918,7 +923,9 @@ window.uploadPhotos = async function (files) {
             },
             (error) => {
                 console.error("Upload Error:", error);
-                status.innerText = `Error: ${error.message}. Check Console (F12).`;
+                // Explicitly show the error to the user
+                alert(`Upload Failed: ${error.message}\nCode: ${error.code}`);
+                status.innerText = `Error: ${error.code}`;
             }
         );
 
