@@ -58,6 +58,27 @@ const PACKING_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning
 const PHOTO_COLLECTION_PATH = `artifacts/${appId}/public/data/orlando_planning_photos`;
 
 // --- UI UTILITIES ---
+
+function verifySecuritySession() {
+    const lastVerified = localStorage.getItem('security_last_verified');
+    const oneHour = 60 * 60 * 1000;
+
+    // Check if session exists and is within 1 hour
+    if (lastVerified && (Date.now() - parseInt(lastVerified) < oneHour)) {
+        return true;
+    }
+
+    // Otherwise prompt
+    const inputAnswer = prompt(SECURITY_QUESTION);
+    if (inputAnswer && inputAnswer.trim().toLowerCase() === SECURITY_ANSWER.toLowerCase()) {
+        // Save new timestamp
+        localStorage.setItem('security_last_verified', Date.now().toString());
+        return true;
+    }
+
+    return false;
+}
+
 // Explicitly attach to window to ensure global availability
 window.showTab = function (tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
@@ -185,9 +206,8 @@ window.loginAs = function (memberId, save = true) {
     const member = FAMILY_MEMBERS.find(m => m.id === memberId);
     if (!member) return;
 
-    // Global Security Check for EVERYONE
-    const inputAnswer = prompt(SECURITY_QUESTION);
-    if (!inputAnswer || inputAnswer.trim().toLowerCase() !== SECURITY_ANSWER.toLowerCase()) {
+    // Global Security Check with Session
+    if (!verifySecuritySession()) {
         alert("Incorrect answer. Access denied.");
         return;
     }
@@ -884,8 +904,7 @@ window.addItineraryRow = async function () {
 // --- GALLERY LOGIC ---
 
 window.unlockUploads = function () {
-    const answer = prompt(SECURITY_QUESTION);
-    if (answer && answer.trim().toLowerCase() === SECURITY_ANSWER.toLowerCase()) {
+    if (verifySecuritySession()) {
         document.getElementById('upload-locked').classList.add('hidden');
         document.getElementById('upload-unlocked').classList.remove('hidden');
     } else {
@@ -1020,8 +1039,7 @@ function renderGallery(photos) {
 window.deletePhoto = async function (docId, url, fileName) {
     if (!confirm("Are you sure you want to delete this memory?")) return;
 
-    const answer = prompt(SECURITY_QUESTION);
-    if (!answer || answer.trim().toLowerCase() !== SECURITY_ANSWER.toLowerCase()) {
+    if (!verifySecuritySession()) {
         alert("Incorrect security answer. Deletion cancelled.");
         return;
     }
