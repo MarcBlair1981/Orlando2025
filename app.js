@@ -897,6 +897,19 @@ window.uploadPhotos = async function (files) {
     if (!files.length) return;
     const status = document.getElementById('upload-status');
 
+    // 1. Ensure Auth
+    if (!firebase.auth().currentUser) {
+        status.innerText = "Connecting to cloud...";
+        try {
+            await firebase.auth().signInAnonymously();
+        } catch (authError) {
+            console.error("Auth Fail from Upload:", authError);
+            alert("Upload Error: Could not sign in to cloud storage. " + authError.message);
+            status.innerText = "Error: Auth Failed";
+            return;
+        }
+    }
+
     const storageRef = firebase.storage().ref();
     const user = FAMILY_MEMBERS.find(m => m.id === currentUserMemberId) || { name: "Guest" };
 
