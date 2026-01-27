@@ -269,7 +269,7 @@ function setupRealtimeListeners() {
     });
 
     db.collection(PHOTO_COLLECTION_PATH).orderBy('timestamp', 'desc').onSnapshot((snapshot) => {
-        const photos = snapshot.docs.map(d => d.data());
+        const photos = snapshot.docs.map(d => ({ ...d.data(), id: d.id }));
         renderGallery(photos);
     });
 }
@@ -976,18 +976,79 @@ function renderGallery(photos) {
 
     photos.forEach(photo => {
         const div = document.createElement('div');
-        div.className = "relative group overflow-hidden rounded-xl shadow-lg aspect-square bg-gray-200";
+        div.className = "relative group overflow-hidden rounded-xl shadow-lg aspect-square bg-gray-200 cursor-pointer";
+
+        // Generate a unique ID for the delete button so we can stop propagation
+        const deleteBtnId = `btn-delete-${photo.id}`;
 
         div.innerHTML = `
             <img src="${photo.url}" class="object-cover w-full h-full transform transition duration-500 group-hover:scale-110" loading="lazy" alt="Memory">
-            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3 opacity-0 group-hover:opacity-100 transition duration-300">
+            
+            <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-300 flex items-center justify-center pointer-events-none">
+                <span class="text-white font-bold opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition delay-100">View</span>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 flex justify-between items-end opacity-0 group-hover:opacity-100 transition duration-300">
                 <p class="text-white text-xs font-bold">📸 ${photo.uploader}</p>
+                <button id="${deleteBtnId}" class="text-white hover:text-red-400 p-1 bg-black/20 rounded hover:bg-black/50 transition pointer-events-auto" title="Delete Photo">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                    </svg>
+                </button>
             </div>
         `;
-        // Lightbox on click (simple)
-        div.onclick = () => window.open(photo.url, '_blank');
+
+        // Handle click on card (Open Image)
+        div.onclick = (e) => {
+            if (e.target.closest('button')) return; // Ignore if clicked delete
+            window.open(photo.url, '_blank');
+        };
+
+        // Attachment for Delete
+        setTimeout(() => {
+            const btn = document.getElementById(deleteBtnId);
+            if (btn) btn.onclick = (e) => {
+                e.stopPropagation();
+                deletePhoto(photo.id, photo.url, photo.fileName);
+            };
+        }, 0);
+
         gallery.appendChild(div);
     });
+}
+
+window.deletePhoto = async function (docId, url, fileName) {
+    if (!confirm("Are you sure you want to delete this memory?")) return;
+
+    const answer = prompt(SECURITY_QUESTION);
+    if (!answer || answer.trim().toLowerCase() !== SECURITY_ANSWER.toLowerCase()) {
+        alert("Incorrect security answer. Deletion cancelled.");
+        return;
+    }
+
+    // Attempt delete
+    try {
+        // 1. Delete from Storage (if fileName exists)
+        if (fileName) {
+            const storageRef = firebase.storage().ref();
+            // Try matching various paths if direct child doesn't work, but based on upload logic it's photos/TIMESTAMP_NAME
+            // We need to parse the path from the URL or just use the known structure if we saved it.
+            // We saved 'fileName' but the actual path was `photos/${Date.now()}_${file.name}`.
+            // Wait, we didn't save the full path. We only saved original fileName. 
+            // We can try to delete just the Firestore doc, OR try to extract path from URL.
+
+            const fileRef = firebase.storage().refFromURL(url);
+            await fileRef.delete();
+        }
+
+        // 2. Delete from Firestore
+        await db.collection(PHOTO_COLLECTION_PATH).doc(docId).delete();
+        alert("Photo deleted successfully.");
+
+    } catch (error) {
+        console.error("Delete failed", error);
+        alert("Error deleting photo: " + error.message);
+    }
 }
 
 window.saveApiKey = function () {
