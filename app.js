@@ -936,22 +936,49 @@ window.uploadPhotos = async function (files) {
     const total = files.length;
 
     for (let file of files) {
+        let uploadFile = file;
+        let uploadName = file.name;
+
         status.innerText = `Starting ${file.name}...`;
-        const fileName = `photos/${Date.now()}_${file.name}`;
+
+        // 2. HEIC CONVERSION
+        if (file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif')) {
+            status.innerText = `Converting ${file.name} to JPEG...`;
+            try {
+                const convertedBlob = await heic2any({
+                    blob: file,
+                    toType: "image/jpeg",
+                    quality: 0.8
+                });
+
+                // heic2any returns a Blob (or array of Blobs). Handle single blob.
+                uploadFile = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+                uploadName = file.name.replace(/\.(heic|heif)$/i, '.jpg');
+                console.log(`Converted ${file.name} -> ${uploadName}`);
+            } catch (err) {
+                console.error("HEIC Conversion Failed", err);
+                status.innerText = `Error converting ${file.name}. Skipped.`;
+                if (!confirm(`Could not convert ${file.name}. Upload anyway? (It may not display correctly)`)) {
+                    continue;
+                }
+            }
+        }
+
+        const fileName = `photos/${Date.now()}_${uploadName}`;
         const fileRef = storageRef.child(fileName);
 
-        // Fix for HEIC files sometimes missing MIME type
+        // Explicit metadata (crucial for HEIC/converted blobs)
         const metadata = {
-            contentType: file.type || 'application/octet-stream'
+            contentType: uploadFile.type || 'image/jpeg'
         };
 
-        const uploadTask = fileRef.put(file, metadata);
+        const uploadTask = fileRef.put(uploadFile, metadata);
 
         // Monitoring
         uploadTask.on('state_changed',
             (snapshot) => {
                 const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                status.innerText = `Uploading ${file.name} (${Math.round(progress)}%)...`;
+                status.innerText = `Uploading ${uploadName} (${Math.round(progress)}%)...`;
             },
             (error) => {
                 console.error("Upload Error:", error);
@@ -969,7 +996,7 @@ window.uploadPhotos = async function (files) {
                 url: url,
                 uploader: user.name.split(' ')[0],
                 timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                fileName: file.name
+                fileName: uploadName // Use the new JPG name
             });
             completed++;
         } catch (error) {
